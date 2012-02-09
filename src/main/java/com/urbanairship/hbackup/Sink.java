@@ -5,6 +5,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 
 import com.urbanairship.hbackup.datasinks.HdfsSink;
+import com.urbanairship.hbackup.datasinks.Jets3tSink;
 
 /**
  * A "sink" is a place to store data. Each type of Sink is an implementation of this abstract class. New
@@ -15,8 +16,7 @@ public abstract class Sink {
         String scheme = uri.getScheme();
         
         if(scheme.equals("s3")) {
-//            return new Jets3tSink(uri, conf)
-            throw new AssertionError("s3 not supported yet");
+            return new Jets3tSink(uri, conf);
         } else if (scheme.equals("hdfs")) {
             return new HdfsSink(uri, conf);
         } else {

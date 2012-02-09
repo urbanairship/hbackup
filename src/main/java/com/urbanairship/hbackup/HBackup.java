@@ -8,6 +8,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -26,6 +27,7 @@ public class HBackup implements Runnable {
     private final AtomicInteger numSkippedUpToDate = new AtomicInteger(0);
     private final AtomicInteger numCopied = new AtomicInteger(0);
     private final AtomicInteger numFailed = new AtomicInteger(0);
+    private final AtomicReference<Exception> workerException = new AtomicReference<Exception>(null);
     
     public HBackup(HBackupConfig conf) throws URISyntaxException, IOException {
         this.conf = conf;
@@ -50,10 +52,10 @@ public class HBackup implements Runnable {
     
         for (HBFile file: source.getFiles(conf.recursive)) {
             if(!sink.existsAndUpToDate(file)) {
-                log.debug("Queueing file for transfer: " + file.getCanonicalPath());
-                workQueue.add(new SinkRunner(file, sink));
+                log.debug("Queueing file for transfer: " + file.getRelativePath());
+                executor.execute(new SinkRunner(file, sink));
             } else {
-                log.debug("Skipping file since the target is up to date: " + file.getCanonicalPath());
+                log.debug("Skipping file since the target is up to date: " + file.getRelativePath());
                 numSkippedUpToDate.incrementAndGet();
             }
         }
@@ -61,9 +63,15 @@ public class HBackup implements Runnable {
         executor.shutdown();
         executor.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
         
-        log.debug("Files copied:  " + numCopied.get());
-        log.debug("Files failed:  " + numFailed.get());
-        log.debug("Files skipped: " + numSkippedUpToDate.get());
+        log.info("Files copied:  " + numCopied.get());
+        log.info("Files failed:  " + numFailed.get());
+        log.info("Files skipped: " + numSkippedUpToDate.get());
+        
+        // Re-throw the first exception seen by a worker thread, if any exceptions occurred
+        Exception ex = workerException.get();
+        if(ex != null) {
+            throw new IOException("Re-throwing worker exception from main thread", ex);
+        }
     }
     
     public int numFailed() {
@@ -88,15 +96,21 @@ public class HBackup implements Runnable {
             try {
                 sink.write(file);
                 numCopied.incrementAndGet();
+            } catch (RuntimeException e) {
+                numFailed.incrementAndGet();
+                log.error("Runtime exception in sink", e);
+                workerException.compareAndSet(null, e);
+                throw e;
             } catch (Exception e) {
                 numFailed.incrementAndGet();
-                log.error("Exception when copying: " + e);
-            }
+                workerException.compareAndSet(null, e);
+                log.error("Exception when copying", e);
+            } 
         }
     }
     
     public static void main(String[] args) throws Exception {
-      HBackup hBackup = new HBackup(HBackupConfig.fromCmdLineArgs(args));
+      HBackup hBackup = new HBackup(HBackupConfig.fromEnv(args));
       hBackup.runWithCheckedExceptions();
       
       if(hBackup.numFailed() > 0) {

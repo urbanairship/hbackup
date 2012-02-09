@@ -23,11 +23,11 @@ public class HdfsSource extends Source {
     private static final Logger log = LogManager.getLogger(HdfsSource.class);
     private final DistributedFileSystem dfs;
     private final URI baseUri;
-    private final HBackupConfig conf;
+//    private final HBackupConfig conf;
     
     public HdfsSource(URI sourceUri, HBackupConfig conf) throws IOException, URISyntaxException {
         this.baseUri = sourceUri;
-        this.conf = conf;
+//        this.conf = conf;
         org.apache.hadoop.conf.Configuration hadoopConf = new org.apache.hadoop.conf.Configuration();
         FileSystem fs = FileSystem.get(baseUri, hadoopConf);
         if(!(fs instanceof DistributedFileSystem)) {
@@ -45,13 +45,13 @@ public class HdfsSource extends Source {
         return hbFiles;
     }
     
-    private void addFiles(List<HBFile> files, Path path, boolean recursive, String canonicalBase) throws IOException {
+    private void addFiles(List<HBFile> files, Path path, boolean recursive, String relativeTo) throws IOException {
         FileStatus[] listing = dfs.listStatus(path);
         
         for(FileStatus stat: listing) {
             if(stat.isDir()) {
                if(recursive) {
-                   addFiles(files, stat.getPath(), recursive, canonicalBase + stat.getPath().getName() + "/");
+                   addFiles(files, stat.getPath(), recursive, relativeTo + stat.getPath().getName() + "/");
                }
             } else { // stat isn't a directory, so it's a file
                 String filename = stat.getPath().toUri().getPath(); // Looks like /dir/dir/filename
@@ -61,7 +61,7 @@ public class HdfsSource extends Source {
                 if(fileBlocks.isUnderConstruction()) { 
                     log.debug("Skipping file under construction: " + filename);
                 } else {
-                    files.add(new HdfsFile(stat, dfs, canonicalBase + stat.getPath().getName()));
+                    files.add(new HdfsFile(stat, dfs, relativeTo + stat.getPath().getName()));
                 }
             }
         }
@@ -73,34 +73,40 @@ public class HdfsSource extends Source {
     private class HdfsFile extends HBFile {
         private final FileStatus stat;
         private final DistributedFileSystem dfs;
-        private final String canonicalPath;
+        private final String relativePath;
         
         /**
-         * @param canonicalPath The filename used by both the source and the target. This is relative 
+         * @param relativePath The filename used by both the source and the target. This is relative 
          * to the base directory of the source. For example, if the source file was 
          * "hdfs://localhost:7080/base/mypics/pony.png", and the base URI was 
-         * "hdfs://localhost:7080.base", the canonicalPath would be "mypics/pony.png" 
+         * "hdfs://localhost:7080.base", the relativePath would be "mypics/pony.png" 
          */
-        public HdfsFile(FileStatus stat, DistributedFileSystem dfs, String canonicalPath) {
+        public HdfsFile(FileStatus stat, DistributedFileSystem dfs, String relativePath) {
             this.stat = stat;
             this.dfs = dfs;
-            this.canonicalPath = canonicalPath;
+            this.relativePath = relativePath;
+            assert relativePath.startsWith("/");
         }
         
         @Override
-        public InputStream getInputStream() throws IOException {
+        public InputStream getFullInputStream() throws IOException {
             return dfs.open(stat.getPath());
+        }
+        
+        @Override
+        public InputStream getPartialInputStream(long offset, long len) {
+            throw new AssertionError("WAAAAAAAT");
         }
         
         /**
          * @return The filename used by both the source and the target. This is relative 
          * to the base directory of the source. For example, if the source file was 
          * "hdfs://localhost:7080/base/mypics/pony.png", and the base URI was 
-         * "hdfs://localhost:7080.base", the canonicalPath would be "mypics/pony.png"
+         * "hdfs://localhost:7080.base", the relativePath would be "/mypics/pony.png"
          */
         @Override
-        public String getCanonicalPath() {
-            return canonicalPath;
+        public String getRelativePath() {
+            return relativePath;
         }
         
         @Override

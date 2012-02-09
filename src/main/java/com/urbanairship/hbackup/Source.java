@@ -6,6 +6,7 @@ import java.net.URISyntaxException;
 import java.util.List;
 
 import com.urbanairship.hbackup.datasources.HdfsSource;
+import com.urbanairship.hbackup.datasources.Jets3tSource;
 
 /**
  * A "source" is a place from which files are retrieved. Each type of Source is an implementation of this 
@@ -17,8 +18,7 @@ public abstract class Source {
         String scheme = uri.getScheme();
         
         if (scheme.equals("s3")) {
-//            return new Jets3tSource(url, conf);
-            throw new AssertionError("s3 source not supported yet");
+            return new Jets3tSource(uri, conf);
         } else if (scheme.equals("hdfs")) {
             return new HdfsSource(uri, conf);
         } else {

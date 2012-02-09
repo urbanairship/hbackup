@@ -23,11 +23,11 @@ public class HdfsSink extends Sink {
     private static final Logger log = LogManager.getLogger(HdfsSink.class);
     private final URI baseUri;
     private final DistributedFileSystem dfs;
-    private final HBackupConfig conf;
+//    private final HBackupConfig conf;
     
     public HdfsSink(URI uri, HBackupConfig conf) throws IOException, URISyntaxException {
         this.baseUri = uri;
-        this.conf = conf;
+//        this.conf = conf;
         org.apache.hadoop.conf.Configuration hadoopConf = new org.apache.hadoop.conf.Configuration();
         FileSystem fs = FileSystem.get(baseUri, hadoopConf);
         if(!(fs instanceof DistributedFileSystem)) {
@@ -38,7 +38,7 @@ public class HdfsSink extends Sink {
     
     @Override
     public boolean existsAndUpToDate(HBFile sourceFile) throws IOException {
-        Path path = new Path(baseUri).suffix(sourceFile.getCanonicalPath());
+        Path path = new Path(baseUri).suffix(sourceFile.getRelativePath());
         try {
             FileStatus targetStat = dfs.getFileStatus(path);
             if(sourceFile.getMTime() > targetStat.getModificationTime()) {
@@ -55,13 +55,13 @@ public class HdfsSink extends Sink {
 
     @Override
     public void write(HBFile file) throws IOException {
-        String canonicalPath = file.getCanonicalPath();
-        Path destPath = new Path(baseUri).suffix(canonicalPath);
-        InputStream is = file.getInputStream();
+        String relativePath = file.getRelativePath();
+        Path destPath = new Path(baseUri).suffix(relativePath);
+        InputStream is = file.getFullInputStream();
         FSDataOutputStream os = dfs.create(destPath);
         Util.copyStream(is, os);
         is.close();
         os.close();
-        log.debug("Done transferring file: " + canonicalPath);
+        log.debug("Done transferring file: " + relativePath);
     }
 }
