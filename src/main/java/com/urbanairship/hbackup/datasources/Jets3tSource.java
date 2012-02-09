@@ -17,6 +17,7 @@ import org.joda.time.DateTimeZone;
 import com.urbanairship.hbackup.HBFile;
 import com.urbanairship.hbackup.HBackupConfig;
 import com.urbanairship.hbackup.Source;
+import com.urbanairship.hbackup.Stats;
 
 public class Jets3tSource extends Source {
 //    private final URI baseUri;
@@ -25,10 +26,12 @@ public class Jets3tSource extends Source {
     private final S3Service s3Service;
     private final String bucketName;
     private final String baseName;
+    private final Stats stats;
     
-    public Jets3tSource(URI uri, HBackupConfig conf) throws IOException {
+    public Jets3tSource(URI uri, HBackupConfig conf, Stats stats) throws IOException {
 //        this.baseUri = uri;
 //        this.conf = conf;
+        this.stats = stats;
         this.bucketName = uri.getHost();
         String uriPath = uri.getPath();
         if(uriPath.startsWith("/")) {

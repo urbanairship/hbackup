@@ -18,14 +18,18 @@ import org.apache.log4j.Logger;
 import com.urbanairship.hbackup.HBFile;
 import com.urbanairship.hbackup.HBackupConfig;
 import com.urbanairship.hbackup.Source;
+import com.urbanairship.hbackup.Stats;
 
 public class HdfsSource extends Source {
     private static final Logger log = LogManager.getLogger(HdfsSource.class);
     private final DistributedFileSystem dfs;
     private final URI baseUri;
+    private final Stats stats;
 //    private final HBackupConfig conf;
     
-    public HdfsSource(URI sourceUri, HBackupConfig conf) throws IOException, URISyntaxException {
+    public HdfsSource(URI sourceUri, HBackupConfig conf, Stats stats) 
+            throws IOException, URISyntaxException {
+        this.stats = stats;
         this.baseUri = sourceUri;
 //        this.conf = conf;
         org.apache.hadoop.conf.Configuration hadoopConf = new org.apache.hadoop.conf.Configuration();
@@ -38,8 +42,6 @@ public class HdfsSource extends Source {
 
     @Override
     public List<HBFile> getFiles(boolean recursive) throws IOException {
-        // Should find Hadoop & HDFS configs on classpath
-        
         List<HBFile> hbFiles = new ArrayList<HBFile>();
         addFiles(hbFiles, new Path(baseUri), recursive, "/");
         return hbFiles;
@@ -48,6 +50,9 @@ public class HdfsSource extends Source {
     private void addFiles(List<HBFile> files, Path path, boolean recursive, String relativeTo) throws IOException {
         FileStatus[] listing = dfs.listStatus(path);
         
+        if(listing == null) {
+            return;
+        }
         for(FileStatus stat: listing) {
             if(stat.isDir()) {
                if(recursive) {

@@ -4,6 +4,7 @@ import java.io.InputStream;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 
 import org.apache.commons.configuration.SystemConfiguration;
@@ -15,32 +16,33 @@ import org.jets3t.service.utils.MultipartUtils;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Assume;
+import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+/**
+ * To actually run this test, the S3 configuration must be given. Something like this
+ * will work: 
+ * 
+ *  -Dhbackup.from.s3AccessKey=myAccessKey1 
+ *  -Dhbackup.from.s3Secret=myAccessKey2 
+ *  -Dhbackup.to.s3AccessKey=myAccessKey2 
+ *  -Dhbackup.to.s3Secret=mySecret2 
+ *  -Dhbackup.test.sourceBucket=mySourceBucket 
+ *  -Dhbackup.test.destBucket=myDestBucket
+ */
 public class S3Tests {
-    /**
-     * To actually run this test, the S3 configuration must be given. Something like this
-     * will work: 
-     * 
-     *  -Dhbackup.from.s3AccessKey=myAccessKey1 
-     *  -Dhbackup.from.s3Secret=myAccessKey2 
-     *  -Dhbackup.to.s3AccessKey=myAccessKey2 
-     *  -Dhbackup.to.s3Secret=mySecret2 
-     *  -Dhbackup.test.sourceBucket=mySourceBucket 
-     *  -Dhbackup.test.destBucket=myDestBucket
-     */
+    public static final String PROP_CLEARBUCKETS = "hbackup.clearTestBuckets"; 
+    
     private List<ObjToDelete> toDelete = new ArrayList<ObjToDelete>();
-//    private static HBackupConfig conf; 
-//    private static AWSCredentials sourceCreds;
-//    private static AWSCredentials sinkCreds;
+
     private static S3Service sourceService;
     private static S3Service sinkService;
     private static String sourceBucket;
     private static String sinkBucket;
     
     @BeforeClass
-    public static void skipUnlessS3Configured() throws Exception {
+    public static void setup() throws Exception {
         sourceBucket = System.getProperty("hbackup.test.sourceBucket");  
         sinkBucket = System.getProperty("hbackup.test.destBucket"); 
 
@@ -54,31 +56,162 @@ public class S3Tests {
         sourceService = new RestS3Service(throwawayConf.s3SourceCredentials);
         sinkService = new RestS3Service(throwawayConf.s3SinkCredentials);
     }
+
+    @Before
+    public void clearBuckets() throws Exception {
+        // If the user set a system property to allow clearing of the source and sink
+        // buckets during testing, delete them.
+        
+        if(Boolean.valueOf(System.getProperty(PROP_CLEARBUCKETS, "false"))) {
+            S3Object[] srcListing = sourceService.listObjects(sourceBucket);
+            for(S3Object obj: srcListing) {
+                sourceService.deleteObject(sourceBucket, obj.getKey());
+            }
+            
+            S3Object[] sinkListing = sinkService.listObjects(sinkBucket);
+            for(S3Object obj: sinkListing) {
+                sinkService.deleteObject(sinkBucket, obj.getKey());
+            }
+        }
+
+        Assert.assertEquals("Source bucket wasn't empty", 0, sourceService.listObjects(sourceBucket).length);
+        Assert.assertEquals("Sink bucket wasn't empty", 0, sinkService.listObjects(sinkBucket).length);
+    }
     
     /**
      * Delete objects created by the last test case.
      */
     @After
     public void cleanup() throws Exception {
-//        for(ObjToDelete obj: toDelete) {
-//            obj.s3Service.deleteObject(obj.bucket, obj.key);
-//        }
-//        toDelete.clear();
+        for(ObjToDelete obj: toDelete) {
+            obj.s3Service.deleteObject(obj.bucket, obj.key);
+        }
+        toDelete.clear();
     }
     
     @Test
     public void s3BasicTest() throws Exception {
-        String contents = "ROFL ROFL LMAO";
-        String sourceKey = "from/ponies.txt";
-        String sinkKey = "to/ponies.txt";
+        final String contents = "ROFL ROFL LMAO";
+        final String sourceKey = "from/ponies.txt";
+        final String sinkKey = "to/ponies.txt";
         sourceService.putObject(sourceBucket, new S3Object(sourceKey, contents.getBytes()));
         deleteLater(sourceService, sourceBucket, sourceKey);
         deleteLater(sinkService, sinkBucket, sinkKey);
         runBackup("s3://"+sourceBucket+"/from", "s3://"+sinkBucket+"/to");
         verifyS3Obj(sinkService, sinkBucket, sinkKey, contents.getBytes());
     }
+
+    @Test
+    public void s3MultipleFilesTest() throws Exception {
+        final String contents1 = "databaaaaase";
+        final String contents2 = "heroes in a half shell; turtle power";
+        final String sourceKey1 = "from/file1.txt";
+        final String sourceKey2 = "from/file2.txt";
+        final String sinkKey1 = "to/file1.txt";
+        final String sinkKey2 = "to/file2.txt";
+        
+        // Set up files in source to be backed up
+        deleteLater(sourceService, sourceBucket, sourceKey1);
+        deleteLater(sourceService, sourceBucket, sourceKey2);
+        deleteLater(sinkService, sinkBucket, sinkKey1);
+        deleteLater(sinkService, sinkBucket, sinkKey2);
+        sourceService.putObject(sourceBucket, new S3Object(sourceKey1, contents1.getBytes()));
+        sourceService.putObject(sourceBucket, new S3Object(sourceKey2, contents2.getBytes()));
+        
+        runBackup("s3://"+sourceBucket+"/from", "s3://"+sinkBucket+"/to");
+        
+        verifyS3Obj(sinkService, sinkBucket, sinkKey1, contents1.getBytes());
+        verifyS3Obj(sinkService, sinkBucket, sinkKey2, contents2.getBytes());
+    }
+
+    /**
+     * If a file exists in the destination but has a different mtime, it should get overwritten.
+     */
+    @Test
+    public void mtimeTest() throws Exception {
+        final String initialContents = "databaaaaase";
+        final String modifiedContents = "heroes in a half shell; turtle power";
+        final String sourceKey = "from/file1.txt";
+        final String sinkKey = "to/file1.txt";
+        
+        // Set up file in source to be backed up
+        deleteLater(sourceService, sourceBucket, sourceKey);
+        deleteLater(sinkService, sinkBucket, sinkKey);
+        sourceService.putObject(sourceBucket, new S3Object(sourceKey, initialContents.getBytes()));
+        verifyS3Obj(sourceService, sourceBucket, sourceKey, initialContents.getBytes());
+        
+        // Backup from source to dest and verify that it worked
+        runBackup("s3://"+sourceBucket+"/from", "s3://"+sinkBucket+"/to");
+        verifyS3Obj(sinkService, sinkBucket, sinkKey, initialContents.getBytes());
+        
+        // Get the metadata for the uploaded object and make sure the source mtime metadata was set
+        long sourceMtime = sourceService.getObject(sourceBucket, sourceKey).getLastModifiedDate().getTime();
+        Map<String,Object> metadata = sinkService.getObjectDetails(sinkBucket, sinkKey).getMetadataMap();
+        long sinkMtimeSource = Long.valueOf((String)(metadata.get(Constant.S3_SOURCE_MTIME)));
+        Assert.assertEquals(sourceMtime, sinkMtimeSource);
+        
+        // Modify the source file and run another backup. The destination should pick up the change.
+        sourceService.putObject(sourceBucket, new S3Object(sourceKey, modifiedContents.getBytes()));
+        verifyS3Obj(sourceService, sourceBucket, sourceKey, modifiedContents.getBytes());
+        runBackup("s3://"+sourceBucket+"/from", "s3://"+sinkBucket+"/to");
+        verifyS3Obj(sinkService, sinkBucket, sinkKey, modifiedContents.getBytes());
+    }
     
-   
+    @Test
+    public void multipartTest() throws Exception {
+        Assume.assumeTrue(Boolean.valueOf(System.getProperty("hbackup.expensiveTests")));
+        
+        // Generate six megs of random bytes to upload to S3. We need six megs because the smalled
+        // allowed part size is 5 megs.
+        Random rng = new Random(0);
+        byte[] sixMegBuf = new byte[6 * 1024 * 1024];
+        rng.nextBytes(sixMegBuf);
+        assert sixMegBuf.length >= MultipartUtils.MIN_PART_SIZE;
+        
+        System.err.println(StringUtils.byteToHexString(MessageDigest.getInstance("MD5").digest(sixMegBuf)));
+        
+        String filename = "mptest.txt";
+        String sourceDir = "from";
+        String sinkDir = "to";
+        
+        String sourceKey = sourceDir + "/" + filename;
+        String sinkKey = sinkDir + "/" + filename;
+        
+        deleteLater(sourceService, sourceBucket, sourceKey);
+        deleteLater(sinkService, sinkBucket, sinkKey);
+        
+        System.err.println("*************************************** Uploading...");
+        sourceService.putObject(sourceBucket, new S3Object(sourceKey, sixMegBuf));
+        System.err.println("***************************************  Verifying...");
+        S3Tests.verifyS3Obj(sourceService, sourceBucket, sourceKey, sixMegBuf);
+        System.err.println("*************************************** Done with source file upload");
+        
+        String sourceUri = "s3://"+sourceBucket+"/"+sourceDir;
+        String sinkUri = "s3://"+sinkBucket+"/"+sinkDir; 
+        
+        SystemConfiguration sysProps = new SystemConfiguration();
+        HBackupConfig conf = new HBackupConfig(sourceUri,
+                sinkUri,
+                2, 
+                true, 
+                sysProps.getString(HBackupConfig.CONF_SOURCES3ACCESSKEY), 
+                sysProps.getString(HBackupConfig.CONF_SOURCES3SECRET), 
+                sysProps.getString(HBackupConfig.CONF_SINKS3ACCESSKEY), 
+                sysProps.getString(HBackupConfig.CONF_SINKS3SECRET),
+                MultipartUtils.MIN_PART_SIZE, // Smallest part size (5MB) will cause multipart upload of 6MB file 
+                MultipartUtils.MIN_PART_SIZE, // Use multipart upload if the object is at least this many bytes
+                new org.apache.hadoop.conf.Configuration(),
+                true);
+        System.err.println("*************************************** Running backup");
+        new HBackup(conf).runWithCheckedExceptions();
+        System.err.println("*************************************** Verifying backup");
+        S3Tests.verifyS3Obj(sinkService, sinkBucket, sinkKey, sixMegBuf);
+        
+        // Get the metadata for the uploaded object and make sure the source mtime metadata was set
+        long sourceMtime = sourceService.getObject(sourceBucket, sourceKey).getLastModifiedDate().getTime();
+        long sinkMtimeSource = Long.valueOf((String)sinkService.getObject(sinkBucket, sinkKey).getMetadata(Constant.S3_SOURCE_MTIME));
+        Assert.assertEquals(sourceMtime, sinkMtimeSource);
+    }
     
     public static void verifyS3Obj(S3Service service, String bucket, String key, byte[] contents) 
             throws Exception {
@@ -89,31 +222,13 @@ public class S3Tests {
             Assert.fail("S3 input stream had no bytes available to verify");
         }
         Assert.assertEquals(contents.length, objSize);
-        byte[] buf = new byte[objSize];
-        int bytesRead = 0;
-        while(bytesRead != objSize) {
-            int bytesThisRead = is.read(buf, bytesRead, objSize-bytesRead);
-            if(bytesThisRead < 0) {
-                Assert.fail();
-            }
-            bytesRead += bytesThisRead;
-        }
-        is.close();
-        Assert.assertArrayEquals(contents, buf);
+        TestUtil.assertStreamEquals(contents, is);
     }
     
     public static void runBackup(String from, String to) throws Exception {
         HBackupConfig conf = HBackupConfig.forTests(from, to);
         new HBackup(conf).runWithCheckedExceptions();
     }
-    
-    
-//    private void uploadS3Obj(HBackupConfig conf, S3Service s3Service, String bucket, String key, 
-//            String contents) throws Exception {
-//        S3Service s3Service = isSource ? sourceService : sinkService;
-//        s3Service.putObject(bucket, new S3Object(key, contents.getBytes()));
-//        
-//    }
     
     private void deleteLater(S3Service service, String bucket, String key) {
         toDelete.add(new ObjToDelete(service, bucket, key));
@@ -134,18 +249,4 @@ public class S3Tests {
             this.key = key;
         }
     }
-    
-    // TODO tests to write:
-    // - Multipart (force with low threshold)
-    // - Absent source or dest bucket
-    // - Other objects not matching "source/"
-    // - Overwriting objects
-    // - Sink is newer, shouldn't overwrite
-    // - No permissions to overwrite
-    // - Null credentials in conf object
-    // - Bad S3 URL
-    // - Dest same as source
-    // - Backup source and/or dest are single named file
-    // - Copying files with escaped special characters e.g. '/'
-    // - Trailing slashes in source and dest
 }

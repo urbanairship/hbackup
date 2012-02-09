@@ -14,17 +14,20 @@ import com.urbanairship.hbackup.datasources.Jets3tSource;
  * below.
  */
 public abstract class Source {
-    public static Source forUri(URI uri, HBackupConfig conf) throws IOException, URISyntaxException {
+    public static Source forUri(URI uri, HBackupConfig conf, Stats stats) throws IOException, URISyntaxException {
         String scheme = uri.getScheme();
         
         if (scheme.equals("s3")) {
-            return new Jets3tSource(uri, conf);
+            return new Jets3tSource(uri, conf, stats);
         } else if (scheme.equals("hdfs")) {
-            return new HdfsSource(uri, conf);
+            return new HdfsSource(uri, conf, stats);
         } else {
             throw new IllegalArgumentException("Unknown URI scheme \"" + scheme + "\" in  URI " + uri);
         }
     }
 
+    /**
+     * Get the list of files present in the source. These are candidates for copying.
+     */
     public abstract List<HBFile> getFiles(boolean recursive) throws IOException;
 }

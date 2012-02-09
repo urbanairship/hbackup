@@ -10,7 +10,6 @@ import org.apache.commons.configuration.PropertiesConfiguration;
 import org.apache.commons.configuration.SystemConfiguration;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.jets3t.service.model.MultipartUpload;
 import org.jets3t.service.security.AWSCredentials;
 import org.jets3t.service.utils.MultipartUtils;
 
@@ -28,30 +27,29 @@ public class HBackupConfig {
     public static final String CONF_SINKS3SECRET = "hbackup.to.s3Secret";
     public static final String CONF_S3PARTSIZE= "hbackup.s3.partSize";
     public static final String CONF_S3MULTIPARTTHRESHOLD = "hbackup.s3.multipartThreshold";
+    public static final String CONF_MTIMECHECK = "backup.mtimecheck";
     
     public static final int DEFAULT_CONCURRENT_FILES = 5;
     public static final long DEFAULT_S3_PART_SIZE = 20 * 1024 * 1024;
     public static final int DEFAULT_S3_MULTIPART_THRESHOLD = 100 * 1024 * 1024;
+    public static final boolean DEFAULT_MTIMECHECK = true;
     
     // Config values
     public final String from;
     public final String to;
     public final int concurrentFiles;
     public final boolean recursive;
-//    public final String sourceS3AccessKey;
-//    public final String sourceS3Secret;
-//    public final String sinkS3AccessKey;
-//    public final String sinkS3Secret;
     public final AWSCredentials s3SourceCredentials;
     public final AWSCredentials s3SinkCredentials;
     public final long s3PartSize;
     public final long s3MultipartThreshold;
     public final org.apache.hadoop.conf.Configuration hadoopConf;
+    public final boolean mtimeCheck;
     
     public HBackupConfig(String from, String to, int concurrentFiles, boolean recursive, 
             String sourceS3AccessKey, String sourceS3Secret, String sinkS3AccessKey, String sinkS3Secret,
             long s3PartSize, long s3MultipartThreshold, 
-            org.apache.hadoop.conf.Configuration hadoopConf) {
+            org.apache.hadoop.conf.Configuration hadoopConf, boolean mtimeCheck) {
         if(from == null || to == null) {
             throw new IllegalArgumentException("from and to cannot be null");
         }
@@ -69,13 +67,10 @@ public class HBackupConfig {
         this.to = to;
         this.concurrentFiles = concurrentFiles;
         this.recursive = recursive;
-//        this.sourceS3AccessKey = sourceS3AccessKey;
-//        this.sourceS3Secret = sourceS3Secret;
-//        this.sinkS3AccessKey = sinkS3AccessKey;
-//        this.sinkS3Secret = sinkS3Secret;
         this.s3PartSize = s3PartSize;
         this.s3MultipartThreshold = s3MultipartThreshold;
         this.hadoopConf = hadoopConf;
+        this.mtimeCheck = mtimeCheck;
         
         if(sourceS3AccessKey != null && sourceS3Secret != null) {
             this.s3SourceCredentials = new AWSCredentials(sourceS3AccessKey, sourceS3Secret);
@@ -107,7 +102,8 @@ public class HBackupConfig {
                 sysProps.getString(CONF_SINKS3SECRET),
                 DEFAULT_S3_PART_SIZE, 
                 DEFAULT_S3_MULTIPART_THRESHOLD, 
-                new org.apache.hadoop.conf.Configuration());
+                new org.apache.hadoop.conf.Configuration(),
+                true);
     }
 
     /**
@@ -178,6 +174,7 @@ public class HBackupConfig {
                 conf.getString(CONF_SINKS3SECRET), 
                 conf.getLong(CONF_S3PARTSIZE, DEFAULT_S3_PART_SIZE),
                 conf.getLong(CONF_S3MULTIPARTTHRESHOLD, DEFAULT_S3_MULTIPART_THRESHOLD),
-                new org.apache.hadoop.conf.Configuration(true));
+                new org.apache.hadoop.conf.Configuration(true),
+                conf.getBoolean(CONF_MTIMECHECK, DEFAULT_MTIMECHECK));
     }
 }
