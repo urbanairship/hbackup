@@ -7,6 +7,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.List;
 
+import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -20,7 +21,6 @@ import com.urbanairship.hbackup.HBFile;
 import com.urbanairship.hbackup.HBackupConfig;
 import com.urbanairship.hbackup.Sink;
 import com.urbanairship.hbackup.Stats;
-import com.urbanairship.hbackup.Util;
 
 public class HdfsSink extends Sink {
     private static final Logger log = LogManager.getLogger(HdfsSink.class);
@@ -72,7 +72,8 @@ public class HdfsSink extends Sink {
                     Path destPath = new Path(baseUri).suffix(relativePath);
                     InputStream is = sourceFile.getFullInputStream();
                     FSDataOutputStream os = dfs.create(destPath);
-                    Util.copyStream(is, os);
+                    IOUtils.copyLarge(is, os);
+//                    Util.copyStream(is, os);
                     is.close();
                     os.close();
                     

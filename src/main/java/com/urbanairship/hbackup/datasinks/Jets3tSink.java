@@ -6,7 +6,6 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -116,6 +115,14 @@ public class Jets3tSink extends Sink {
 
     private static enum MultipartTransferState {BEFORE_INIT, IN_PROGRESS, ERROR, DONE};
     
+    /**
+     * This is slightly complicated. The complication arises from coordinating multiple threads
+     * as they transfer multiple chunks for the same file in parallel. The first thread to start
+     * a chunk must initialize the multipart transfer, which happens in beforeChunk(). The last
+     * thread to finish a chunk must commit the result, which happens in chunkSuccess(). There
+     * is a simple state machine to coordinate the initialization/commit/abort of the multipart
+     * transfer, and the state machine's state is stored in the "MultipartTransferState state" var.
+     */
     private class ChunkWriter {
         private final HBFile file;
         private final List<Runnable> chunks;
@@ -151,11 +158,8 @@ public class Jets3tSink extends Sink {
                                 InputStream partInputStream = file.getPartialInputStream(startAt, objLen);
                                 S3Object s3ObjForPart = new S3Object(destS3Key);
                                 s3ObjForPart.setDataInputStream(partInputStream);
-                                System.err.println("********* Uploading part " + partNum + " with size " + objLen);
                                 MultipartPart thisPart = s3Service.multipartUploadPart(mpUpload, partNum+1, 
                                         s3ObjForPart);
-                                System.err.println("********* Uploaded part " + partNum + " with size " + thisPart.getSize() + 
-                                        " and expected size " + objLen);
                                 assert thisPart.getSize() == objLen;
                                 
                                 chunkSuccess(thisPart);

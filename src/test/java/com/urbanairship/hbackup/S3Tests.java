@@ -168,8 +168,6 @@ public class S3Tests {
         rng.nextBytes(sixMegBuf);
         assert sixMegBuf.length >= MultipartUtils.MIN_PART_SIZE;
         
-        System.err.println(StringUtils.byteToHexString(MessageDigest.getInstance("MD5").digest(sixMegBuf)));
-        
         String filename = "mptest.txt";
         String sourceDir = "from";
         String sinkDir = "to";
@@ -179,12 +177,9 @@ public class S3Tests {
         
         deleteLater(sourceService, sourceBucket, sourceKey);
         deleteLater(sinkService, sinkBucket, sinkKey);
-        
-        System.err.println("*************************************** Uploading...");
+
         sourceService.putObject(sourceBucket, new S3Object(sourceKey, sixMegBuf));
-        System.err.println("***************************************  Verifying...");
         S3Tests.verifyS3Obj(sourceService, sourceBucket, sourceKey, sixMegBuf);
-        System.err.println("*************************************** Done with source file upload");
         
         String sourceUri = "s3://"+sourceBucket+"/"+sourceDir;
         String sinkUri = "s3://"+sinkBucket+"/"+sinkDir; 
@@ -202,9 +197,7 @@ public class S3Tests {
                 MultipartUtils.MIN_PART_SIZE, // Use multipart upload if the object is at least this many bytes
                 new org.apache.hadoop.conf.Configuration(),
                 true);
-        System.err.println("*************************************** Running backup");
         new HBackup(conf).runWithCheckedExceptions();
-        System.err.println("*************************************** Verifying backup");
         S3Tests.verifyS3Obj(sinkService, sinkBucket, sinkKey, sixMegBuf);
         
         // Get the metadata for the uploaded object and make sure the source mtime metadata was set
