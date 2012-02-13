@@ -19,13 +19,13 @@ public class HBackupConfig {
     // Config keys 
     public static final String CONF_FROM = "hbackup.from";
     public static final String CONF_TO = "hbackup.to";
-    public static final String CONF_CONCURRENTFILES = "hbackup.concurrentFiles";
+    public static final String CONF_CONCURRENTCHUNKS = "hbackup.concurrentChunks";
     public static final String CONF_RECURSIVE = "hbackup.recursive";
     public static final String CONF_SOURCES3ACCESSKEY = "hbackup.from.s3AccessKey";
     public static final String CONF_SOURCES3SECRET = "hbackup.from.s3Secret";
     public static final String CONF_SINKS3ACCESSKEY = "hbackup.to.s3AccessKey";
     public static final String CONF_SINKS3SECRET = "hbackup.to.s3Secret";
-    public static final String CONF_S3PARTSIZE= "hbackup.s3.partSize";
+    public static final String CONF_S3PARTSIZE = "hbackup.s3.partSize";
     public static final String CONF_S3MULTIPARTTHRESHOLD = "hbackup.s3.multipartThreshold";
     public static final String CONF_MTIMECHECK = "backup.mtimecheck";
     
@@ -167,7 +167,7 @@ public class HBackupConfig {
         
         return new HBackupConfig(conf.getString(CONF_FROM, null), 
                 conf.getString(CONF_TO, null), 
-                conf.getInt(CONF_CONCURRENTFILES, DEFAULT_CONCURRENT_FILES), 
+                conf.getInt(CONF_CONCURRENTCHUNKS, DEFAULT_CONCURRENT_FILES), 
                 conf.getBoolean(CONF_RECURSIVE, DEFAULT_RECURSIVE),
                 conf.getString(CONF_SOURCES3ACCESSKEY, null), 
                 conf.getString(CONF_SOURCES3SECRET, null), 
@@ -177,5 +177,38 @@ public class HBackupConfig {
                 conf.getLong(CONF_S3MULTIPARTTHRESHOLD, DEFAULT_S3_MULTIPART_THRESHOLD),
                 new org.apache.hadoop.conf.Configuration(true),
                 conf.getBoolean(CONF_MTIMECHECK, DEFAULT_MTIMECHECK));
+    }
+    
+    final public static OptHelp[] optHelps = new OptHelp[] {
+            new OptHelp(CONF_FROM, "URI of data source, e.g. hdfs:///home/bob, hdfs://reports-master-0:7050/home/bob, s3://mybucket/a/b"),
+            new OptHelp(CONF_TO, "URI of data sink"),
+            new OptHelp(CONF_CONCURRENTCHUNKS, "Number of file chunks to transfer at a time", Integer.toString(DEFAULT_CONCURRENT_FILES)),
+            new OptHelp(CONF_RECURSIVE, "Recursively back up the entire source directory tree", Boolean.toString(DEFAULT_RECURSIVE)),
+            new OptHelp(CONF_SOURCES3ACCESSKEY, "When the source is an S3 bucket, use this to set its access key"),
+            new OptHelp(CONF_SOURCES3SECRET, "When the source is an S3 bucket, use this to set its secret"),
+            new OptHelp(CONF_SINKS3ACCESSKEY, "When the destination is an S3 bucket, use this to set its access key"),
+            new OptHelp(CONF_SINKS3SECRET, "When the destination is an S3 bucket, use this to set its secret"),
+            new OptHelp(CONF_S3PARTSIZE, "When writing to S3 using the multipart API, what size of parts should the file be split into?", 
+                    Long.toString(DEFAULT_S3_PART_SIZE)),
+            new OptHelp(CONF_S3MULTIPARTTHRESHOLD, "When writing to S3, use the multipart API for files larger than this", 
+                    Long.toString(DEFAULT_S3_MULTIPART_THRESHOLD)),
+            new OptHelp(CONF_MTIMECHECK, "If true, re-transfer files when the source and sink mtime or length differs. "
+                    + "If false, ignore the mtime and only check the length.", Boolean.toString(DEFAULT_MTIMECHECK))
+    };
+    
+    public static class OptHelp {
+        final String name;
+        final String desc;
+        final String def; 
+        
+        public OptHelp(String optName, String help) {
+            this(optName, help, null);
+        }
+        
+        public OptHelp(String optName, String help, String def) {
+            this.name = optName;
+            this.desc = help;
+            this.def = def;
+        }
     }
 }

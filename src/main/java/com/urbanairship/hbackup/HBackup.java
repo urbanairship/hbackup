@@ -8,8 +8,15 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
+import org.apache.commons.lang.StringUtils;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
+import com.urbanairship.hbackup.HBackupConfig.OptHelp;
+
+// TODO:
+//  Don't require credentials for public buckets
+//  Allow non-recursive S3 sources
 
 /**
  * The main class and client API. Instantiate this class with a backup confguration and call run()
@@ -85,17 +92,53 @@ public class HBackup implements Runnable {
     public Stats getStats() {
         return stats;
     }
-    
+
     public static void main(String[] args) throws Exception {
-      HBackup hBackup = new HBackup(HBackupConfig.fromEnv(args));
-      hBackup.runWithCheckedExceptions();
-      
-      if(hBackup.getStats().numFilesFailed.get() > 0) {
-          log.error("Exiting with non-zero exit code because some copy failed");
-          System.exit(1);
-      } else {
-          log.debug("No failure occurred, exiting with exit code 0");
-          System.exit(0);
-      }
-  }
+        HBackup hBackup = null;
+        try {
+            hBackup = new HBackup(HBackupConfig.fromEnv(args));
+        } catch (IllegalArgumentException e) {
+            log.error(e);
+            System.err.println(usage());
+            System.exit(1);
+        }
+        hBackup.runWithCheckedExceptions();
+
+        if(hBackup.getStats().numFilesFailed.get() > 0) {
+            log.error("Exiting with non-zero exit code because some copy failed");
+            System.exit(1);
+        } else {
+            log.debug("No failure occurred, exiting with exit code 0");
+            System.exit(0);
+        }
+    }
+    
+    public static String usage() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Usage: CLASSPATH=... java -Dprop=val -Dprop=val com.urbanairship.hbackup.HBackup [resource] [resource]\n");
+        sb.append("The \"resource\"s are filenames or URLs pointing to properties files which may set config values.\n");
+        sb.append("You can set config values in the resource files or by setting JVM system properties with -Dprop=val.\n");
+        sb.append("\n");
+        sb.append("The available config values are:\n");
+        
+        final int padNameTo = 32;
+
+        for(OptHelp optHelp: HBackupConfig.optHelps) {
+            sb.append(" ");
+            sb.append(StringUtils.rightPad(optHelp.name, padNameTo));
+            sb.append(optHelp.desc);
+            if(optHelp.def != null) {
+                sb.append(" (default " + optHelp.def + ")");
+            }
+            sb.append("\n");
+        }
+        
+        sb.append("\n");
+        sb.append("When specifying HDFS URIs, you can leave the host part blank (hdfs://dir/file.txt instead of hdfs://host:port/dir/file.txt) if " + 
+                "the classpath contains a Hadoop configuration pointing to a default filesystem.\n");
+        sb.append("\n");
+        sb.append("Examples:\n");
+        sb.append("  CLASSPATH=/mnt/services/tasktracker/etc/:.hbackup-0.9-jar-with-dependencies.jar java -Dhbackup.from=hdfs:///from -Dhbackup.to=hdfs:///to com.urbanairship.hbackup.HBackup ./otherconfigs.properties");
+        return sb.toString();
+    }
 }
