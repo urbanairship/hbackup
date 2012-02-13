@@ -4,8 +4,16 @@ import java.io.IOException;
 import java.io.InputStream;
 
 public abstract class HBFile {
+    /**
+     * @return An input stream that gives the full file. The caller is responsible for closing the
+     * stream when finished.
+     */
     public abstract InputStream getFullInputStream() throws IOException;
     
+    /**
+     * @return An input stream for a portion of the input file. The caller is responsible for 
+     * closing the stream when finished.
+     */
     public abstract InputStream getPartialInputStream(long offset, long len) throws IOException;
     
     /**

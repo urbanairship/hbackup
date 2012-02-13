@@ -73,7 +73,6 @@ public class HdfsSink extends Sink {
                     InputStream is = sourceFile.getFullInputStream();
                     FSDataOutputStream os = dfs.create(destPath);
                     IOUtils.copyLarge(is, os);
-//                    Util.copyStream(is, os);
                     is.close();
                     os.close();
                     

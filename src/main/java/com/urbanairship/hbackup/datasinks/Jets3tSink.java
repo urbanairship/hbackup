@@ -73,6 +73,8 @@ public class Jets3tSink extends Sink {
                     // Re-upload if the file in the destination is based on a previous version
                     // of the source.
                     if(!conf.mtimeCheck) {
+                        log.debug("File considered up to date because length was the same and " +
+                                "mtime checking was disabled: " + sourceRelativePath);
                         return true;
                     } 
                     long destMtime;
@@ -101,8 +103,10 @@ public class Jets3tSink extends Sink {
                     DateTime targetMTime = new DateTime(destMtime, DateTimeZone.UTC);
                     DateTime sourceMTime = new DateTime(file.getMTime(), DateTimeZone.UTC);
                     if(targetMTime.equals(sourceMTime)) {
+                        log.debug("Mtime and length match for file, won't re-upload: " + sourceRelativePath);
                         return true;
                     } else {
+                        log.debug("Same length but different mtime for file, will re-upload: " + sourceRelativePath);
                         return false;
                     }
                 }
@@ -152,10 +156,11 @@ public class Jets3tSink extends Sink {
                      chunks.add(new Runnable() {
                         @Override
                         public void run() {
+                            InputStream partInputStream = null;
                             try {
                                 MultipartUpload mpUpload = beforeChunk();
                                 
-                                InputStream partInputStream = file.getPartialInputStream(startAt, objLen);
+                                partInputStream = file.getPartialInputStream(startAt, objLen);
                                 S3Object s3ObjForPart = new S3Object(destS3Key);
                                 s3ObjForPart.setDataInputStream(partInputStream);
                                 MultipartPart thisPart = s3Service.multipartUploadPart(mpUpload, partNum+1, 
@@ -166,6 +171,12 @@ public class Jets3tSink extends Sink {
                             } catch (Exception e) {
                                 chunkError();
                                 stats.transferExceptions.add(e);
+                            } finally {
+                                if(partInputStream != null) {
+                                    try {
+                                        partInputStream.close();
+                                    } catch (IOException e) { }
+                                }
                             }
                         }
                      });
@@ -176,14 +187,28 @@ public class Jets3tSink extends Sink {
                  chunks.add(new Runnable() {
                     @Override
                     public void run() {
+                        InputStream is = null;
                         try {
+                            log.debug("Starting regular non-multipart S3 upload of " + file.getRelativePath());
                             S3Object s3Obj = new S3Object(destS3Key);
                             s3Obj.addMetadata(Constant.S3_SOURCE_MTIME, Long.toString(file.getMTime()));
-                            s3Obj.setDataInputStream(file.getFullInputStream());
+                            InputStream is = file.getFullInputStream();
+                            s3Obj.setDataInputStream(is);
                             s3Obj.setContentLength(file.getLength());
                             s3Service.putObject(bucketName, s3Obj);
+                            log.debug("Finished regular non-multipart S3 upload of " + file.getRelativePath());
+                            stats.numChunksSucceeded.incrementAndGet();
+                            stats.numFilesSucceeded.incrementAndGet();
                         } catch (Exception e) {
                             stats.transferExceptions.add(e);
+                            stats.numFilesFailed.incrementAndGet();
+                            stats.numChunksFailed.incrementAndGet();
+                        } finally {
+                            if(is != null) {
+                                try {
+                                    is.close();
+                                } catch (IOException e) { }
+                            }
                         }
                     }
                  });
@@ -217,7 +242,7 @@ public class Jets3tSink extends Sink {
                 // Upload th e source file's mtime as S3 metadata. The next time we run a backup,
                 // this will tell us whether we should re-upload the file.
                 multipartObj.addMetadata(Constant.S3_SOURCE_MTIME, Long.toString(file.getMTime()));
-                
+                log.debug("Starting multipart upload for " + file.getRelativePath());
                 mpUpload = s3Service.multipartStartUpload(bucketName, multipartObj);
                 state = MultipartTransferState.IN_PROGRESS;
             }
@@ -231,9 +256,11 @@ public class Jets3tSink extends Sink {
         synchronized private void chunkSuccess(MultipartPart part) throws Exception {
             assert state == MultipartTransferState.IN_PROGRESS;
             
+            log.debug("Multipart chunk succeeded for " + file.getRelativePath());
             finishedParts.add(part);
             stats.numChunksSucceeded.incrementAndGet();
             if(finishedParts.size() == numChunks) {
+                log.debug("Multipart upload complete for " + file.getRelativePath());
                 s3Service.multipartCompleteUpload(mpUpload, finishedParts);
                 
                 state = MultipartTransferState.DONE;
@@ -249,6 +276,7 @@ public class Jets3tSink extends Sink {
             
             state = MultipartTransferState.ERROR;
             try {
+                log.debug("Aborting multipart upload of " + file.getRelativePath() + " due to error");
                 s3Service.multipartAbortUpload(mpUpload);
             } catch (Exception e) {
                 log.error("Another error when trying to abort multipart upload", e);
