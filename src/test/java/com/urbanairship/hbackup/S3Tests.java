@@ -1,14 +1,12 @@
 package com.urbanairship.hbackup;
 
 import java.io.InputStream;
-import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
 import org.apache.commons.configuration.SystemConfiguration;
-import org.apache.hadoop.util.StringUtils;
 import org.jets3t.service.S3Service;
 import org.jets3t.service.impl.rest.httpclient.RestS3Service;
 import org.jets3t.service.model.S3Object;

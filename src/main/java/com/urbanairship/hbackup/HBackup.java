@@ -54,6 +54,7 @@ public class HBackup implements Runnable {
                     log.debug("Queueing file for transfer: " + file.getRelativePath());
                     // Ask the sink how the file should be chunked for transfer
                     for(Runnable r: sink.getChunks(file)) {
+                        // Enqueue each chunk for transfer
                         executor.execute(r);
                     }
                 } else {
@@ -84,37 +85,6 @@ public class HBackup implements Runnable {
     public Stats getStats() {
         return stats;
     }
-    
-//    /**
-//     * These objects go into the work queue to be executed by the thread pool executor. Their only
-//     * purpose is to invoke a Sink when they're run().
-//     */
-//    private class SinkRunner implements Runnable {
-//        private final HBFile file;
-//        private final Sink sink;
-//        
-//        public SinkRunner(HBFile file, Sink sink) {
-//            this.file = file;
-//            this.sink = sink;
-//        }
-//        
-//        @Override
-//        public void run() {
-//            try {
-//                sink.write(file);
-//                numCopied.incrementAndGet();
-//            } catch (RuntimeException e) {
-//                numFailed.incrementAndGet();
-//                log.error("Runtime exception in sink", e);
-//                workerException.compareAndSet(null, e);
-//                throw e;
-//            } catch (Exception e) {
-//                numFailed.incrementAndGet();
-//                workerException.compareAndSet(null, e);
-//                log.error("Exception when copying", e);
-//            } 
-//        }
-//    }
     
     public static void main(String[] args) throws Exception {
       HBackup hBackup = new HBackup(HBackupConfig.fromEnv(args));

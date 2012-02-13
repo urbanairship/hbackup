@@ -33,6 +33,7 @@ public class HBackupConfig {
     public static final long DEFAULT_S3_PART_SIZE = 20 * 1024 * 1024;
     public static final int DEFAULT_S3_MULTIPART_THRESHOLD = 100 * 1024 * 1024;
     public static final boolean DEFAULT_MTIMECHECK = true;
+    public static final boolean DEFAULT_RECURSIVE = true;
     
     // Config values
     public final String from;
@@ -164,14 +165,14 @@ public class HBackupConfig {
         //system props override anything in the files
         conf.addConfiguration(new SystemConfiguration());
         
-        return new HBackupConfig(conf.getString(CONF_FROM), 
-                conf.getString(CONF_TO), 
+        return new HBackupConfig(conf.getString(CONF_FROM, null), 
+                conf.getString(CONF_TO, null), 
                 conf.getInt(CONF_CONCURRENTFILES, DEFAULT_CONCURRENT_FILES), 
-                conf.getBoolean(CONF_RECURSIVE),
-                conf.getString(CONF_SOURCES3ACCESSKEY), 
-                conf.getString(CONF_SOURCES3SECRET), 
-                conf.getString(CONF_SINKS3ACCESSKEY), 
-                conf.getString(CONF_SINKS3SECRET), 
+                conf.getBoolean(CONF_RECURSIVE, DEFAULT_RECURSIVE),
+                conf.getString(CONF_SOURCES3ACCESSKEY, null), 
+                conf.getString(CONF_SOURCES3SECRET, null), 
+                conf.getString(CONF_SINKS3ACCESSKEY, null), 
+                conf.getString(CONF_SINKS3SECRET, null), 
                 conf.getLong(CONF_S3PARTSIZE, DEFAULT_S3_PART_SIZE),
                 conf.getLong(CONF_S3MULTIPARTTHRESHOLD, DEFAULT_S3_MULTIPART_THRESHOLD),
                 new org.apache.hadoop.conf.Configuration(true),
