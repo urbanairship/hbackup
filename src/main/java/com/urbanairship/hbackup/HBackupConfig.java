@@ -30,7 +30,7 @@ public class HBackupConfig {
     public static final String CONF_MTIMECHECK = "backup.mtimecheck";
     
     public static final int DEFAULT_CONCURRENT_FILES = 5;
-    public static final long DEFAULT_S3_PART_SIZE = 20 * 1024 * 1024;
+    public static final long DEFAULT_S3_PART_SIZE = MultipartUtils.MIN_PART_SIZE;
     public static final int DEFAULT_S3_MULTIPART_THRESHOLD = 100 * 1024 * 1024;
     public static final boolean DEFAULT_MTIMECHECK = true;
     public static final boolean DEFAULT_RECURSIVE = true;
