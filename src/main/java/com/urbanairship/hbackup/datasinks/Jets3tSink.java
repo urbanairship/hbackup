@@ -272,14 +272,17 @@ public class Jets3tSink extends Sink {
          * Called when some chunk couldn't be transferred.
          */
         synchronized private void chunkError() {
-            assert state == MultipartTransferState.IN_PROGRESS;
-            
-            state = MultipartTransferState.ERROR;
-            try {
+            assert state == MultipartTransferState.IN_PROGRESS || state == MultipartTransferState.ERROR;
+
+            if(state == MultipartTransferState.IN_PROGRESS) {
+                state = MultipartTransferState.ERROR;
+                stats.numFilesFailed.incrementAndGet();
                 log.debug("Aborting multipart upload of " + file.getRelativePath() + " due to error");
-                s3Service.multipartAbortUpload(mpUpload);
-            } catch (Exception e) {
-                log.error("Another error when trying to abort multipart upload", e);
+                try {
+                    s3Service.multipartAbortUpload(mpUpload);
+                } catch (Exception e) {
+                    log.error("Another error when trying to abort multipart upload", e);
+                }
             }
             stats.numChunksFailed.incrementAndGet();
         }

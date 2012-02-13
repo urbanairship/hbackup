@@ -37,7 +37,5 @@ public abstract class Sink {
      */
     public abstract boolean existsAndUpToDate(HBFile file) throws IOException;
     
-//    public abstract void write(HBFile file) throws IOException;
-    
     public abstract List<Runnable> getChunks(HBFile file);
 }
