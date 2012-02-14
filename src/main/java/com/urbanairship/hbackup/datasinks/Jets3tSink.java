@@ -25,6 +25,8 @@ import com.urbanairship.hbackup.HBackupConfig;
 import com.urbanairship.hbackup.Sink;
 import com.urbanairship.hbackup.Stats;
 
+// TODO only get remote listing once, instead of once per file
+
 public class Jets3tSink extends Sink {
     private static final Logger log = LogManager.getLogger(HdfsSink.class);
 //    private final URI baseUri;
@@ -39,12 +41,17 @@ public class Jets3tSink extends Sink {
         this.stats = stats;
         this.conf = conf;
         this.bucketName = uri.getHost();
-        String uriPath = uri.getPath();
-        if(uriPath.startsWith("/")) {
-            this.baseName = uriPath.substring(1);            
-        } else {
-            this.baseName = uriPath;
+        
+        // The path component of the incoming URI, which we will prefix onto all outgoing files,
+        // must not begin with "/", and must end with "/".
+        String baseNameTemp = uri.getPath();
+        if(baseNameTemp.startsWith("/")) {
+            baseNameTemp = baseNameTemp.substring(1);            
         }
+        if(!baseNameTemp.endsWith("/")) {
+            baseNameTemp = baseNameTemp + "/";
+        }
+        this.baseName = baseNameTemp;
         
         try {
             s3Service = new RestS3Service(conf.s3SinkCredentials);
@@ -111,6 +118,7 @@ public class Jets3tSink extends Sink {
                     }
                 }
             }
+            log.debug("No remote file existed for file, will upload: " + sourceRelativePath);
             return false; // No matching remote file was found in the file listing
         } catch (ServiceException e) {
             throw new IOException(e);

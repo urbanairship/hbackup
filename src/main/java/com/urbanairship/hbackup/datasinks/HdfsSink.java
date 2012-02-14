@@ -69,7 +69,7 @@ public class HdfsSink extends Sink {
             public void run() {
                 try {
                     String relativePath = sourceFile.getRelativePath();
-                    Path destPath = new Path(baseUri).suffix(relativePath);
+                    Path destPath = new Path(baseUri).suffix("/" + relativePath);
                     InputStream is = sourceFile.getFullInputStream();
                     FSDataOutputStream os = dfs.create(destPath);
                     IOUtils.copyLarge(is, os);

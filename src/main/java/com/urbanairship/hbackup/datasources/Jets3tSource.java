@@ -58,6 +58,9 @@ public class Jets3tSource extends Source {
                 if(s3Obj.getContentLength() > 0) {
                     // Get the "file name" relative to the hbackup source "directory"
                     String relativePath = s3Obj.getKey().substring(baseName.length());
+                    if(relativePath.startsWith("/")) {
+                        relativePath = relativePath.substring(1);
+                    }
                     outFiles.add(new Jets3tSourceFile(s3Obj, relativePath));
                 }
             }
@@ -74,6 +77,7 @@ public class Jets3tSource extends Source {
         public Jets3tSourceFile(S3Object s3Obj, String relativePath) {
             this.s3Obj = s3Obj; 
             this.relativePath = relativePath;
+            assert !relativePath.startsWith("/");
         }
         
         @Override

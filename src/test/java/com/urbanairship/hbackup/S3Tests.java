@@ -251,14 +251,15 @@ public class S3Tests {
             
         } finally {
             if(hdfsCluster != null) {
-                hdfsCluster.shutdown();
+                TestUtil.shutdownMiniDfs(hdfsCluster);
             }
         }
-        
     }
     
     public static void verifyS3Obj(S3Service service, String bucket, String key, byte[] contents) 
             throws Exception {
+        @SuppressWarnings("unused")
+        S3Object[] listing = service.listObjects(bucket);
         S3Object s3Obj = service.getObject(bucket, key);
         InputStream is = s3Obj.getDataInputStream(); 
         int objSize = (int)s3Obj.getContentLength();

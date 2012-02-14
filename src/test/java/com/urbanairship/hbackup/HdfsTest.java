@@ -12,6 +12,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -60,6 +61,12 @@ public class HdfsTest {
         }
     }
     
+    @AfterClass
+    public static void shutdownMiniDfsClusters() {
+        TestUtil.shutdownMiniDfs(srcCluster);
+        TestUtil.shutdownMiniDfs(sinkCluster);
+    }
+    
     @Test
     public void testHdfsToHdfs() throws Exception {
         final String FILE_CONTENTS = "Unicorns are better than ponies";
@@ -71,6 +78,7 @@ public class HdfsTest {
                 getSinkUrl("/copydest")));
         hBackup.runWithCheckedExceptions();
         
+        FileStatus[] listing = sinkFs.listStatus(new Path("/"));
         Assert.assertTrue(sinkFs.exists(new Path("/copydest/myfile.txt")));
         verifyContents(sinkFs, "/copydest/myfile.txt", FILE_CONTENTS);
     }
@@ -102,8 +110,19 @@ public class HdfsTest {
         writeFile(srcFs, sourceName, modifiedContents);
         TestUtil.runBackup(getSourceUrl("/from"), getSinkUrl("/to"));
         verifyContents(sinkFs, sinkName, modifiedContents);
-        
     }
+    
+//    @Test
+//    public void relativePathTest() throws Exception {
+//        public Path path = new Path("hdfs://somefile.txt");
+//        FileSystem fs = FileSystem.get(path.toUri(), srcCluster.);
+//        URI relativeUri = new URI("from/relative.txt");
+//        
+//        String hdfsDefault = "hdfs://localhost" + srcCluster.getNameNodePort() + "/";
+//        
+//        URI absoluteUri = new URI(hdfsDefault).relativize(relativeUri);
+//        int x = 5;
+//    }
     
     private static void writeFile(FileSystem fs, String path, String contents) throws Exception {
         OutputStream os = fs.create(new Path(path), true);

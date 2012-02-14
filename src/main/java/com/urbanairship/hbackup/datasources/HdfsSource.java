@@ -45,7 +45,7 @@ public class HdfsSource extends Source {
     @Override
     public List<HBFile> getFiles(boolean recursive) throws IOException {
         List<HBFile> hbFiles = new ArrayList<HBFile>();
-        addFiles(hbFiles, new Path(baseUri), recursive, "/");
+        addFiles(hbFiles, new Path(baseUri), recursive, "");
         return hbFiles;
     }
     
@@ -82,17 +82,11 @@ public class HdfsSource extends Source {
         private final DistributedFileSystem dfs;
         private final String relativePath;
         
-        /**
-         * @param relativePath The filename used by both the source and the target. This is relative 
-         * to the base directory of the source. For example, if the source file was 
-         * "hdfs://localhost:7080/base/mypics/pony.png", and the base URI was 
-         * "hdfs://localhost:7080.base", the relativePath would be "mypics/pony.png" 
-         */
         public HdfsFile(FileStatus stat, DistributedFileSystem dfs, String relativePath) {
             this.stat = stat;
             this.dfs = dfs;
             this.relativePath = relativePath;
-            assert relativePath.startsWith("/");
+            assert !relativePath.startsWith("/");
         }
         
         @Override
