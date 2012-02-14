@@ -192,7 +192,7 @@ public class Jets3tSink extends Sink {
                             log.debug("Starting regular non-multipart S3 upload of " + file.getRelativePath());
                             S3Object s3Obj = new S3Object(destS3Key);
                             s3Obj.addMetadata(Constant.S3_SOURCE_MTIME, Long.toString(file.getMTime()));
-                            InputStream is = file.getFullInputStream();
+                            is = file.getFullInputStream();
                             s3Obj.setDataInputStream(is);
                             s3Obj.setContentLength(file.getLength());
                             s3Service.putObject(bucketName, s3Obj);

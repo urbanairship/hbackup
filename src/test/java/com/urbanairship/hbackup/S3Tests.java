@@ -1,12 +1,17 @@
 package com.urbanairship.hbackup;
 
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
 import org.apache.commons.configuration.SystemConfiguration;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.jets3t.service.S3Service;
 import org.jets3t.service.impl.rest.httpclient.RestS3Service;
 import org.jets3t.service.model.S3Object;
@@ -159,7 +164,7 @@ public class S3Tests {
     public void multipartTest() throws Exception {
         Assume.assumeTrue(Boolean.valueOf(System.getProperty("hbackup.expensiveTests")));
         
-        // Generate six megs of random bytes to upload to S3. We need six megs because the smalled
+        // Generate six megs of random bytes to upload to S3. We need six megs because the smallest
         // allowed part size is 5 megs.
         Random rng = new Random(0);
         byte[] sixMegBuf = new byte[6 * 1024 * 1024];
@@ -202,6 +207,54 @@ public class S3Tests {
         long sourceMtime = sourceService.getObject(sourceBucket, sourceKey).getLastModifiedDate().getTime();
         long sinkMtimeSource = Long.valueOf((String)sinkService.getObject(sinkBucket, sinkKey).getMetadata(Constant.S3_SOURCE_MTIME));
         Assert.assertEquals(sourceMtime, sinkMtimeSource);
+    }
+    
+    @Test
+    public void multipartHdfsToS3Test() throws Exception {
+        // Generate six megs of random bytes to upload to S3. We need six megs because the smallest
+        // allowed part size is 5 megs.
+        
+        Random rng = new Random(0);
+        byte[] sixMegBuf = new byte[6 * 1024 * 1024];
+        rng.nextBytes(sixMegBuf);
+        assert sixMegBuf.length >= MultipartUtils.MIN_PART_SIZE;
+
+        MiniDFSCluster hdfsCluster = null;
+        try {
+            hdfsCluster = new MiniDFSCluster(new Configuration(), 1, true, null);
+            FileSystem fs = hdfsCluster.getFileSystem();
+            OutputStream os = fs.create(new Path("/sixmegfile.txt"));
+            os.write(sixMegBuf);
+            os.close();
+            
+            final String prefix = "multipart_hdfs_to_s3";
+            final String filename = "sixmegfile.txt";
+            String key = prefix + "/" + filename;
+            deleteLater(sinkService, sinkBucket, key);
+            
+            SystemConfiguration sysProps = new SystemConfiguration();
+            HBackupConfig conf = new HBackupConfig(
+                    "hdfs://localhost:" + hdfsCluster.getNameNodePort() + "/",
+                    "s3://" + sinkBucket + "/" + prefix,
+                    2, 
+                    true, 
+                    null, 
+                    null, 
+                    sysProps.getString(HBackupConfig.CONF_SINKS3ACCESSKEY), 
+                    sysProps.getString(HBackupConfig.CONF_SINKS3SECRET),
+                    MultipartUtils.MIN_PART_SIZE, // Smallest part size (5MB) will cause multipart upload of 6MB file 
+                    MultipartUtils.MIN_PART_SIZE, // Use multipart upload if the object is at least this many bytes
+                    new org.apache.hadoop.conf.Configuration(),
+                    true);
+            new HBackup(conf).runWithCheckedExceptions();
+            S3Tests.verifyS3Obj(sinkService, sinkBucket, key, sixMegBuf);
+            
+        } finally {
+            if(hdfsCluster != null) {
+                hdfsCluster.shutdown();
+            }
+        }
+        
     }
     
     public static void verifyS3Obj(S3Service service, String bucket, String key, byte[] contents) 

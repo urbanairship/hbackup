@@ -7,6 +7,7 @@ import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -15,6 +16,7 @@ import org.apache.hadoop.hdfs.protocol.LocatedBlocks;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import com.google.common.io.LimitInputStream;
 import com.urbanairship.hbackup.HBFile;
 import com.urbanairship.hbackup.HBackupConfig;
 import com.urbanairship.hbackup.Source;
@@ -99,8 +101,10 @@ public class HdfsSource extends Source {
         }
         
         @Override
-        public InputStream getPartialInputStream(long offset, long len) {
-            throw new AssertionError("WAAAAAAAT");
+        public InputStream getPartialInputStream(long offset, long len) throws IOException {
+            FSDataInputStream is = dfs.open(stat.getPath());
+            is.seek(offset);
+            return new LimitInputStream(is, len);
         }
         
         /**
