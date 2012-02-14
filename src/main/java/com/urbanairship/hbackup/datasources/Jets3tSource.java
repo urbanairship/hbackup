@@ -6,20 +6,24 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.jets3t.service.S3Service;
 import org.jets3t.service.S3ServiceException;
 import org.jets3t.service.ServiceException;
 import org.jets3t.service.impl.rest.httpclient.RestS3Service;
 import org.jets3t.service.model.S3Object;
-import org.joda.time.DateTime;
-import org.joda.time.DateTimeZone;
+import org.jets3t.service.model.StorageObject;
 
+import com.urbanairship.hbackup.Constant;
 import com.urbanairship.hbackup.HBFile;
 import com.urbanairship.hbackup.HBackupConfig;
 import com.urbanairship.hbackup.Source;
 import com.urbanairship.hbackup.Stats;
 
 public class Jets3tSource extends Source {
+    private static final Logger log = LogManager.getLogger(Jets3tSource.class);
+    
 //    private final URI baseUri;
 //    private final HBackupConfig conf;
 //    private final AWSCredentials awsCreds;
@@ -108,8 +112,32 @@ public class Jets3tSource extends Source {
         }
     
         @Override
-        public long getMTime() {
-            return new DateTime(s3Obj.getLastModifiedDate(), DateTimeZone.UTC).getMillis();
+        public long getMTime() throws IOException {
+//            return new DateTime(s3Obj.getLastModifiedDate(), DateTimeZone.UTC).getMillis();
+            try {
+                StorageObject detailsObj = s3Service.getObjectDetails(s3Obj.getBucketName(), s3Obj.getKey());
+                Object metadataObj = detailsObj.getMetadata(Constant.S3_SOURCE_MTIME);
+                if(metadataObj == null) {
+                    // Fall back to the S3 last-modified time if no source mtime metadata exists
+                    log.debug("Source object had no source mtime metadata, falling back to last-modified time");
+                    return s3Obj.getLastModifiedDate().getTime();
+                }
+                if(!(metadataObj instanceof String)) {
+                    log.debug("Source object mtime metadata should have been a string but was " +
+                            metadataObj + ", falling back to last-modified time for " + s3Obj.getKey());
+                    return s3Obj.getLastModifiedDate().getTime();
+                }
+                try {
+                    return Long.valueOf((String)detailsObj.getMetadata(Constant.S3_SOURCE_MTIME));
+                } catch (NumberFormatException e) {
+                    log.debug("Source object mtime metadata couldn't be parsed for " + s3Obj.getKey() +
+                            ", was " + metadataObj + ". Falling back to last-modified time");
+                    return s3Obj.getLastModifiedDate().getTime();
+                }
+                
+            } catch (ServiceException e) {
+                throw new IOException(e);
+            }
         }
     
         @Override

@@ -25,7 +25,7 @@ public abstract class HBFile {
      */
     public abstract String getRelativePath();
     
-    public abstract long getMTime();
+    public abstract long getMTime() throws IOException;
     
     public abstract long getLength();
 }

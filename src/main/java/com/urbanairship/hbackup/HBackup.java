@@ -7,6 +7,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 
 import org.apache.commons.lang.StringUtils;
 import org.apache.log4j.LogManager;
@@ -51,23 +52,41 @@ public class HBackup implements Runnable {
         
         ThreadPoolExecutor executor = new ThreadPoolExecutor(conf.concurrentFiles, conf.concurrentFiles, 10, 
                 TimeUnit.SECONDS, workQueue);
-        executor.prestartAllCoreThreads();
+        
+        Pattern p = null;
+        if(conf.includePathsRegex != null) {
+            log.debug("Using input file filter regex " + conf.includePathsRegex);
+            p = Pattern.compile(conf.includePathsRegex);
+        }
         
         // Consider all files in the source
         for (HBFile file: source.getFiles(conf.recursive)) {
             // Copy the file unless it's up to date in the sink
             try {
-                if(!sink.existsAndUpToDate(file)) {
-                    log.debug("Queueing file for transfer: " + file.getRelativePath());
-                    // Ask the sink how the file should be chunked for transfer
-                    for(Runnable r: sink.getChunks(file)) {
-                        // Enqueue each chunk for transfer
-                        executor.execute(r);
+                String relativePath = file.getRelativePath(); 
+                
+                // If regex file filtering is configured, check whether this file should be backed up
+                if(p != null) {
+                    if(!p.matcher(relativePath).matches()) {
+                        log.debug("Skipping file " + relativePath + " because it didn't match regex " 
+                                + conf.includePathsRegex);
+                        continue;
                     }
-                } else {
+                }
+                
+                if(sink.existsAndUpToDate(file)) {
                     log.debug("Skipping file since the target is up to date: " + file.getRelativePath());
                     stats.numUpToDateFilesSkipped.incrementAndGet();
+                    continue;
                 }
+                
+                log.debug("Queueing file for transfer: " + file.getRelativePath());
+                // Ask the sink how the file should be chunked for transfer
+                for(Runnable r: sink.getChunks(file)) {
+                    // Enqueue each chunk for transfer
+                    executor.execute(r);
+                }
+
             } catch (IOException e) {
                 log.error("Skipping file " + file.getRelativePath() + " due to exception", e);
             }

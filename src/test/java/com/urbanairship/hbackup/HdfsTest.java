@@ -46,7 +46,6 @@ public class HdfsTest {
 
         srcFs = srcCluster.getFileSystem();
         sinkFs = sinkCluster.getFileSystem();
-
     }
     
     /**

@@ -27,7 +27,8 @@ public class HBackupConfig {
     public static final String CONF_SINKS3SECRET = "hbackup.to.s3Secret";
     public static final String CONF_S3PARTSIZE = "hbackup.s3.partSize";
     public static final String CONF_S3MULTIPARTTHRESHOLD = "hbackup.s3.multipartThreshold";
-    public static final String CONF_MTIMECHECK = "backup.mtimecheck";
+    public static final String CONF_MTIMECHECK = "hbackup.mtimecheck";
+    public static final String CONF_INCLUDEPATHSREGEX = "hbackup.includePathsRegex";
     
     public static final int DEFAULT_CONCURRENT_FILES = 5;
     public static final long DEFAULT_S3_PART_SIZE = MultipartUtils.MIN_PART_SIZE;
@@ -46,11 +47,13 @@ public class HBackupConfig {
     public final long s3MultipartThreshold;
     public final org.apache.hadoop.conf.Configuration hadoopConf;
     public final boolean mtimeCheck;
+    public final String includePathsRegex;
     
     public HBackupConfig(String from, String to, int concurrentFiles, boolean recursive, 
             String sourceS3AccessKey, String sourceS3Secret, String sinkS3AccessKey, String sinkS3Secret,
             long s3PartSize, long s3MultipartThreshold, 
-            org.apache.hadoop.conf.Configuration hadoopConf, boolean mtimeCheck) {
+            org.apache.hadoop.conf.Configuration hadoopConf, boolean mtimeCheck,
+            String includePathsRegex) {
         if(from == null || to == null) {
             throw new IllegalArgumentException("from and to cannot be null");
         }
@@ -72,6 +75,7 @@ public class HBackupConfig {
         this.s3MultipartThreshold = s3MultipartThreshold;
         this.hadoopConf = hadoopConf;
         this.mtimeCheck = mtimeCheck;
+        this.includePathsRegex = includePathsRegex;
         
         if(sourceS3AccessKey != null && sourceS3Secret != null) {
             this.s3SourceCredentials = new AWSCredentials(sourceS3AccessKey, sourceS3Secret);
@@ -104,7 +108,8 @@ public class HBackupConfig {
                 DEFAULT_S3_PART_SIZE, 
                 DEFAULT_S3_MULTIPART_THRESHOLD, 
                 new org.apache.hadoop.conf.Configuration(),
-                true);
+                true,
+                null);
     }
 
     /**
@@ -176,7 +181,8 @@ public class HBackupConfig {
                 conf.getLong(CONF_S3PARTSIZE, DEFAULT_S3_PART_SIZE),
                 conf.getLong(CONF_S3MULTIPARTTHRESHOLD, DEFAULT_S3_MULTIPART_THRESHOLD),
                 new org.apache.hadoop.conf.Configuration(true),
-                conf.getBoolean(CONF_MTIMECHECK, DEFAULT_MTIMECHECK));
+                conf.getBoolean(CONF_MTIMECHECK, DEFAULT_MTIMECHECK),
+                conf.getString(CONF_INCLUDEPATHSREGEX, null));
     }
     
     final public static OptHelp[] optHelps = new OptHelp[] {
@@ -193,7 +199,8 @@ public class HBackupConfig {
             new OptHelp(CONF_S3MULTIPARTTHRESHOLD, "When writing to S3, use the multipart API for files larger than this", 
                     Long.toString(DEFAULT_S3_MULTIPART_THRESHOLD)),
             new OptHelp(CONF_MTIMECHECK, "If true, re-transfer files when the source and sink mtime or length differs. "
-                    + "If false, ignore the mtime and only check the length.", Boolean.toString(DEFAULT_MTIMECHECK))
+                    + "If false, ignore the mtime and only check the length.", Boolean.toString(DEFAULT_MTIMECHECK)),
+            new OptHelp(CONF_INCLUDEPATHSREGEX, "If set, only files matching this regex will be sent. Filenames are relative to the backup directory.")
     };
     
     public static class OptHelp {

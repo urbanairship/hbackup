@@ -16,6 +16,7 @@ import org.jets3t.service.impl.rest.httpclient.RestS3Service;
 import org.jets3t.service.model.MultipartPart;
 import org.jets3t.service.model.MultipartUpload;
 import org.jets3t.service.model.S3Object;
+import org.jets3t.service.model.StorageObject;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 
@@ -64,64 +65,110 @@ public class Jets3tSink extends Sink {
     public boolean existsAndUpToDate(HBFile file) throws IOException {
         try {
             String sourceRelativePath = file.getRelativePath();
-            S3Object[] listing = s3Service.listObjects(bucketName, baseName + file.getRelativePath(), null);
-            for(S3Object stat: listing) {
-                String sinkRelativePath = stat.getKey().substring(baseName.length()+1);
-                if(sinkRelativePath.equals(sourceRelativePath)) {
-                    // The file exists in the destination.
+            assert !sourceRelativePath.startsWith("/");
+//            S3Object[] listing = s3Service.listObjects(bucketName, baseName + file.getRelativePath(), null);
+            
+            StorageObject s3Obj = s3Service.getObjectDetails(bucketName, baseName + file.getRelativePath());
+            if(s3Obj == null) {
+                log.debug("No matching remote file existed, will upload: " + sourceRelativePath);
+                return false; // No matching remote file was found in the file listing
+            }
+            if(file.getLength() != s3Obj.getContentLength()) {
+                log.debug("File in destination had a different length than the source " +
+                        " for " + sourceRelativePath + ". Will re-upload.");
+                return false;
+            }
+            Object mtimeObj = s3Obj.getMetadata(Constant.S3_SOURCE_MTIME);
+            if(mtimeObj == null) {
+                log.debug("Remote object had no source mtime metadata and mtime " + 
+                        "for file " + sourceRelativePath + ", and mtime " + 
+                        "checking is enabled. Will re-upload.");
+                return false;
+            }
+            if(mtimeObj instanceof String) {
+                try {
+                    long destMtime = Long.valueOf((String)mtimeObj);
                     
-                    // Re-upload if the file in the destination is a different size than the source.
-                    if(file.getLength() != stat.getContentLength()) {
-                        log.debug("File in destination had a different length than the source " +
-                                " for " + sourceRelativePath + ". Will re-upload.");
-                        return false;
-                    }
-
-                    // Re-upload if the file in the destination is based on a previous version
-                    // of the source.
-                    if(!conf.mtimeCheck) {
-                        log.debug("File considered up to date because length was the same and " +
-                                "mtime checking was disabled: " + sourceRelativePath);
-                        return true;
-                    } 
-                    long destMtime;
-                    Object mtimeObj = stat.getMetadata(Constant.S3_SOURCE_MTIME);
-                    if(mtimeObj == null) {
-                        log.debug("Remote object had no source mtime metadata and mtime " + 
-                                "for file " + sourceRelativePath + ", and mtime " + 
-                                "checking is enabled. Will re-upload.");
-                        return false;
-                    }
-                    if(mtimeObj instanceof String) {
-                        try {
-                            destMtime = Long.valueOf((String)mtimeObj);
-                        } catch (NumberFormatException e) {
-                            log.warn("Remote source mtime metadata couldn't be parsed " +
-                                    "as long, value was " + mtimeObj + ". Will re-upload.");
-                            return false;
-                        }
-                    } else {
-                        log.warn("Remote object metadata should have been a String but " +
-                                "was actually " + mtimeObj + " for file " + 
-                                sourceRelativePath + ". Will re-upload.");
-                        return false;
-                    }
-                                
-                    DateTime targetMTime = new DateTime(destMtime, DateTimeZone.UTC);
-                    DateTime sourceMTime = new DateTime(file.getMTime(), DateTimeZone.UTC);
-                    if(targetMTime.equals(sourceMTime)) {
+                    if(file.getMTime() == destMtime) {
                         log.debug("Mtime and length match for file, won't re-upload: " + sourceRelativePath);
                         return true;
                     } else {
                         log.debug("Same length but different mtime for file, will re-upload: " + sourceRelativePath);
                         return false;
                     }
+                } catch (NumberFormatException e) {
+                    log.warn("Remote source mtime metadata couldn't be parsed " +
+                            "as long, value was " + mtimeObj + ". Will re-upload.");
+                    return false;
                 }
+            } else {
+                log.warn("Remote object metadata should have been a String but " +
+                        "was actually " + mtimeObj + " for file " + 
+                        sourceRelativePath + ". Will re-upload.");
+                return false;
             }
-            log.debug("No remote file existed for file, will upload: " + sourceRelativePath);
-            return false; // No matching remote file was found in the file listing
+
+//            String sinkRelativePath = stat.getKey().substring(baseName.length());
+//            if(sinkRelativePath.startsWith("/")) {
+//                sinkRelativePath = sinkRelativePath.substring(1);
+//            }
+//        
+//            for(S3Object stat: listing) {
+//                if(sinkRelativePath.equals(sourceRelativePath)) {
+//                    // The file exists in the destination.
+//                    
+//                    // Re-upload if the file in the destination is a different size than the source.
+//        
+//                    // Re-upload if the file in the destination is based on a previous version
+//                    // of the source.
+//                    if(!conf.mtimeCheck) {
+//                        log.debug("File considered up to date because length was the same and " +
+//                                "mtime checking was disabled: " + sourceRelativePath);
+//                        return true;
+//                    } 
+//                    long destMtime;
+//                    Object mtimeObj = stat.getMetadata(Constant.S3_SOURCE_MTIME);
+//                    if(mtimeObj == null) {
+//                        log.debug("Remote object had no source mtime metadata and mtime " + 
+//                                "for file " + sourceRelativePath + ", and mtime " + 
+//                                "checking is enabled. Will re-upload.");
+//                        return false;
+//                    }
+//                    if(mtimeObj instanceof String) {
+//                        try {
+//                            destMtime = Long.valueOf((String)mtimeObj);
+//                        } catch (NumberFormatException e) {
+//                            log.warn("Remote source mtime metadata couldn't be parsed " +
+//                                    "as long, value was " + mtimeObj + ". Will re-upload.");
+//                            return false;
+//                        }
+//                    } else {
+//                        log.warn("Remote object metadata should have been a String but " +
+//                                "was actually " + mtimeObj + " for file " + 
+//                                sourceRelativePath + ". Will re-upload.");
+//                        return false;
+//                    }
+//                                
+//                    DateTime targetMTime = new DateTime(destMtime, DateTimeZone.UTC);
+//                    DateTime sourceMTime = new DateTime(file.getMTime(), DateTimeZone.UTC);
+//                    if(targetMTime.equals(sourceMTime)) {
+//                        log.debug("Mtime and length match for file, won't re-upload: " + sourceRelativePath);
+//                        return true;
+//                    } else {
+//                        log.debug("Same length but different mtime for file, will re-upload: " + sourceRelativePath);
+//                        return false;
+//                    }
+//                }
+//            }
+//            log.debug("No matching remote file existed, will upload: " + sourceRelativePath);
+//            return false; // No matching remote file was found in the file listing
         } catch (ServiceException e) {
-            throw new IOException(e);
+            if(e.getResponseCode() == 404) {
+                log.debug("Sink object not present (404) for " + file.getRelativePath() + ", will upload");
+                return false;
+            } else {
+                throw new IOException(e);
+            }
         }
     }
 
@@ -149,7 +196,10 @@ public class Jets3tSink extends Sink {
         
         public ChunkWriter(HBFile hbFile) {
              this.file = hbFile;
-             destS3Key = baseName + file.getRelativePath();
+             String relativePath = file.getRelativePath();
+             assert !relativePath.startsWith("/");
+             assert baseName.endsWith("/");
+             destS3Key = baseName + relativePath;
              
              final long inputLen = file.getLength();
              if(inputLen >= conf.s3MultipartThreshold) {
