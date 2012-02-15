@@ -25,18 +25,23 @@ import com.urbanairship.hbackup.Stats;
 public class HdfsSink extends Sink {
     private static final Logger log = LogManager.getLogger(HdfsSink.class);
 //    private final URI baseUri;
-    private String baseUri;
+    private final String baseName;
     private final DistributedFileSystem dfs;
     private final Stats stats;
     private final HBackupConfig conf;
     
     public HdfsSink(URI uri, HBackupConfig conf, Stats stats) throws IOException, URISyntaxException {
         this.stats = stats;
-        if(uri.toString().endsWith("/")) {
-            this.baseUri = uri.toString();
-        } else {
-            this.baseUri = uri.toString() + "/";
+        
+        String tempBaseName = uri.getPath();
+        if(!tempBaseName.startsWith("/")) {
+            tempBaseName = "/" + tempBaseName;
         }
+        if(!tempBaseName.endsWith("/")) {
+            tempBaseName = tempBaseName + "/";
+        }
+        this.baseName = tempBaseName;
+        
         this.conf = conf;
         org.apache.hadoop.conf.Configuration hadoopConf = new org.apache.hadoop.conf.Configuration();
         FileSystem fs = FileSystem.get(uri, hadoopConf);
@@ -48,7 +53,7 @@ public class HdfsSink extends Sink {
     
     @Override
     public boolean existsAndUpToDate(HBFile sourceFile) throws IOException {
-        Path path = new Path(baseUri + sourceFile.getRelativePath());
+        Path path = new Path(baseName + sourceFile.getRelativePath());
         try {
             FileStatus targetStat = dfs.getFileStatus(path);
             if (sourceFile.getLength() != targetStat.getLen()) {
@@ -90,7 +95,7 @@ public class HdfsSink extends Sink {
                 try {
                     String relativePath = sourceFile.getRelativePath();
                     assert !relativePath.startsWith("/");
-                    Path destPath = new Path(baseUri + relativePath);
+                    Path destPath = new Path(baseName + relativePath);
                     is = sourceFile.getFullInputStream();
                     os = dfs.create(destPath);
                     IOUtils.copyLarge(is, os);

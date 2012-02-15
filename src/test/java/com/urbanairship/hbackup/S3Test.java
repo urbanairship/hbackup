@@ -1,6 +1,5 @@
 package com.urbanairship.hbackup;
 
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
@@ -9,6 +8,7 @@ import java.util.Random;
 
 import org.apache.commons.configuration.SystemConfiguration;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
@@ -17,6 +17,7 @@ import org.jets3t.service.impl.rest.httpclient.RestS3Service;
 import org.jets3t.service.model.S3Object;
 import org.jets3t.service.utils.MultipartUtils;
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.Assume;
 import org.junit.Before;
@@ -38,6 +39,7 @@ import org.junit.Test;
  */
 public class S3Test {
     public static final String PROP_CLEARBUCKETS = "hbackup.clearTestBuckets"; 
+    public static final String PROP_DOS3TESTS = "hbackup.doS3Tests";
     
     private List<ObjToDelete> toDelete = new ArrayList<ObjToDelete>();
 
@@ -45,11 +47,15 @@ public class S3Test {
     private static S3Service sinkService;
     private static String sourceBucket;
     private static String sinkBucket;
+    private static MiniDFSCluster dfsCluster = null;
     
     @BeforeClass
     public static void setup() throws Exception {
         sourceBucket = System.getProperty("hbackup.test.sourceBucket");  
         sinkBucket = System.getProperty("hbackup.test.destBucket"); 
+        
+        // S3 tests aren't free, so skip them unless enabled by system property
+        Assume.assumeTrue(Boolean.valueOf(System.getProperty(PROP_DOS3TESTS, "false")));
         
         Assume.assumeNotNull(System.getProperty(HBackupConfig.CONF_SINKS3ACCESSKEY));
         Assume.assumeNotNull(System.getProperty(HBackupConfig.CONF_SOURCES3ACCESSKEY));
@@ -60,6 +66,8 @@ public class S3Test {
         HBackupConfig throwawayConf = HBackupConfig.forTests("fakesource", "fakeddest");
         sourceService = new RestS3Service(throwawayConf.s3SourceCredentials);
         sinkService = new RestS3Service(throwawayConf.s3SinkCredentials);
+        
+        dfsCluster = new MiniDFSCluster(new Configuration(), 1, true, null);
     }
 
     @Before
@@ -92,6 +100,16 @@ public class S3Test {
             obj.s3Service.deleteObject(obj.bucket, obj.key);
         }
         toDelete.clear();
+        
+        FileSystem fs = dfsCluster.getFileSystem();
+        for(FileStatus stat: fs.listStatus(new Path("/"))) {
+            fs.delete(stat.getPath(), true);
+        }
+    }
+    
+    @AfterClass
+    public static void shutdownMiniDfsClusters() {
+        TestUtil.shutdownMiniDfs(dfsCluster);
     }
     
     @Test
@@ -103,7 +121,7 @@ public class S3Test {
         deleteLater(sourceService, sourceBucket, sourceKey);
         deleteLater(sinkService, sinkBucket, sinkKey);
         runBackup("s3://"+sourceBucket+"/from", "s3://"+sinkBucket+"/to");
-        verifyS3Obj(sinkService, sinkBucket, sinkKey, contents.getBytes());
+        TestUtil.verifyS3Obj(sinkService, sinkBucket, sinkKey, contents.getBytes());
     }
 
     @Test
@@ -125,8 +143,8 @@ public class S3Test {
         
         runBackup("s3://"+sourceBucket+"/from", "s3://"+sinkBucket+"/to");
         
-        verifyS3Obj(sinkService, sinkBucket, sinkKey1, contents1.getBytes());
-        verifyS3Obj(sinkService, sinkBucket, sinkKey2, contents2.getBytes());
+        TestUtil.verifyS3Obj(sinkService, sinkBucket, sinkKey1, contents1.getBytes());
+        TestUtil.verifyS3Obj(sinkService, sinkBucket, sinkKey2, contents2.getBytes());
     }
 
     /**
@@ -143,11 +161,11 @@ public class S3Test {
         deleteLater(sourceService, sourceBucket, sourceKey);
         deleteLater(sinkService, sinkBucket, sinkKey);
         sourceService.putObject(sourceBucket, new S3Object(sourceKey, initialContents.getBytes()));
-        verifyS3Obj(sourceService, sourceBucket, sourceKey, initialContents.getBytes());
+        TestUtil.verifyS3Obj(sourceService, sourceBucket, sourceKey, initialContents.getBytes());
         
         // Backup from source to dest and verify that it worked
         runBackup("s3://"+sourceBucket+"/from", "s3://"+sinkBucket+"/to");
-        verifyS3Obj(sinkService, sinkBucket, sinkKey, initialContents.getBytes());
+        TestUtil.verifyS3Obj(sinkService, sinkBucket, sinkKey, initialContents.getBytes());
         
         // Get the metadata for the uploaded object and make sure the source mtime metadata was set
         long sourceMtime = sourceService.getObject(sourceBucket, sourceKey).getLastModifiedDate().getTime();
@@ -157,15 +175,13 @@ public class S3Test {
         
         // Modify the source file and run another backup. The destination should pick up the change.
         sourceService.putObject(sourceBucket, new S3Object(sourceKey, modifiedContents.getBytes()));
-        verifyS3Obj(sourceService, sourceBucket, sourceKey, modifiedContents.getBytes());
+        TestUtil.verifyS3Obj(sourceService, sourceBucket, sourceKey, modifiedContents.getBytes());
         runBackup("s3://"+sourceBucket+"/from", "s3://"+sinkBucket+"/to");
-        verifyS3Obj(sinkService, sinkBucket, sinkKey, modifiedContents.getBytes());
+        TestUtil.verifyS3Obj(sinkService, sinkBucket, sinkKey, modifiedContents.getBytes());
     }
     
     @Test
     public void multipartTest() throws Exception {
-        Assume.assumeTrue(Boolean.valueOf(System.getProperty("hbackup.expensiveTests")));
-        
         // Generate six megs of random bytes to upload to S3. We need six megs because the smallest
         // allowed part size is 5 megs.
         Random rng = new Random(0);
@@ -184,7 +200,7 @@ public class S3Test {
         deleteLater(sinkService, sinkBucket, sinkKey);
 
         sourceService.putObject(sourceBucket, new S3Object(sourceKey, sixMegBuf));
-        S3Test.verifyS3Obj(sourceService, sourceBucket, sourceKey, sixMegBuf);
+        TestUtil.verifyS3Obj(sourceService, sourceBucket, sourceKey, sixMegBuf);
         
         String sourceUri = "s3://"+sourceBucket+"/"+sourceDir;
         String sinkUri = "s3://"+sinkBucket+"/"+sinkDir; 
@@ -204,7 +220,7 @@ public class S3Test {
                 true,
                 null);
         new HBackup(conf).runWithCheckedExceptions();
-        S3Test.verifyS3Obj(sinkService, sinkBucket, sinkKey, sixMegBuf);
+        TestUtil.verifyS3Obj(sinkService, sinkBucket, sinkKey, sixMegBuf);
         
         // Get the metadata for the uploaded object and make sure the source mtime metadata was set
         long sourceMtime = sourceService.getObject(sourceBucket, sourceKey).getLastModifiedDate().getTime();
@@ -214,8 +230,6 @@ public class S3Test {
     
     @Test
     public void multipartHdfsToS3Test() throws Exception {
-        Assume.assumeTrue(Boolean.valueOf(System.getProperty("hbackup.expensiveTests")));
-
         // Generate six megs of random bytes to upload to S3. We need six megs because the smallest
         // allowed part size is 5 megs.
         
@@ -224,42 +238,33 @@ public class S3Test {
         rng.nextBytes(sixMegBuf);
         assert sixMegBuf.length >= MultipartUtils.MIN_PART_SIZE;
 
-        MiniDFSCluster hdfsCluster = null;
-        try {
-            hdfsCluster = new MiniDFSCluster(new Configuration(), 1, true, null);
-            FileSystem fs = hdfsCluster.getFileSystem();
-            OutputStream os = fs.create(new Path("/sixmegfile.txt"));
-            os.write(sixMegBuf);
-            os.close();
-            
-            final String prefix = "multipart_hdfs_to_s3";
-            final String filename = "sixmegfile.txt";
-            String key = prefix + "/" + filename;
-            deleteLater(sinkService, sinkBucket, key);
-            
-            SystemConfiguration sysProps = new SystemConfiguration();
-            HBackupConfig conf = new HBackupConfig(
-                    "hdfs://localhost:" + hdfsCluster.getNameNodePort() + "/",
-                    "s3://" + sinkBucket + "/" + prefix,
-                    2, 
-                    true, 
-                    null, 
-                    null, 
-                    sysProps.getString(HBackupConfig.CONF_SINKS3ACCESSKEY), 
-                    sysProps.getString(HBackupConfig.CONF_SINKS3SECRET),
-                    MultipartUtils.MIN_PART_SIZE, // Smallest part size (5MB) will cause multipart upload of 6MB file 
-                    MultipartUtils.MIN_PART_SIZE, // Use multipart upload if the object is at least this many bytes
-                    new org.apache.hadoop.conf.Configuration(),
-                    true,
-                    null);
-            new HBackup(conf).runWithCheckedExceptions();
-            S3Test.verifyS3Obj(sinkService, sinkBucket, key, sixMegBuf);
-            
-        } finally {
-            if(hdfsCluster != null) {
-                TestUtil.shutdownMiniDfs(hdfsCluster);
-            }
-        }
+        FileSystem fs = dfsCluster.getFileSystem();
+        OutputStream os = fs.create(new Path("/sixmegfile.txt"));
+        os.write(sixMegBuf);
+        os.close();
+        
+        final String prefix = "multipart_hdfs_to_s3";
+        final String filename = "sixmegfile.txt";
+        String key = prefix + "/" + filename;
+        deleteLater(sinkService, sinkBucket, key);
+        
+        SystemConfiguration sysProps = new SystemConfiguration();
+        HBackupConfig conf = new HBackupConfig(
+                "hdfs://localhost:" + dfsCluster.getNameNodePort() + "/",
+                "s3://" + sinkBucket + "/" + prefix,
+                2, 
+                true, 
+                null, 
+                null, 
+                sysProps.getString(HBackupConfig.CONF_SINKS3ACCESSKEY), 
+                sysProps.getString(HBackupConfig.CONF_SINKS3SECRET),
+                MultipartUtils.MIN_PART_SIZE, // Smallest part size (5MB) will cause multipart upload of 6MB file 
+                MultipartUtils.MIN_PART_SIZE, // Use multipart upload if the object is at least this many bytes
+                new org.apache.hadoop.conf.Configuration(),
+                true,
+                null);
+        new HBackup(conf).runWithCheckedExceptions();
+        TestUtil.verifyS3Obj(sinkService, sinkBucket, key, sixMegBuf);
     }
 
     /**
@@ -275,67 +280,57 @@ public class S3Test {
         byte[] oneKBuf = new byte[1024];
         rng.nextBytes(oneKBuf);
 
-        MiniDFSCluster hdfsCluster = null;
-        try {
-            hdfsCluster = new MiniDFSCluster(new Configuration(), 1, true, null);
-            FileSystem fs = hdfsCluster.getFileSystem();
-            String filename = "/one_k_file.txt";
-            OutputStream os = fs.create(new Path(filename));
-            os.write(oneKBuf);
-            os.close();
-            
-            deleteLater(sinkService, sinkBucket, filename);
-            
-            String sourceUri = "hdfs://localhost:" + hdfsCluster.getNameNodePort() + filename; 
-            
-            SystemConfiguration sysProps = new SystemConfiguration();
-            HBackupConfig conf = new HBackupConfig(
-                    sourceUri,
-                    "s3://" + sinkBucket + "/prefix",
-                    2,
-                    true,
-                    null,
-                    null,
-                    sysProps.getString(HBackupConfig.CONF_SINKS3ACCESSKEY), 
-                    sysProps.getString(HBackupConfig.CONF_SINKS3SECRET),
-                    MultipartUtils.MIN_PART_SIZE, // Smallest part size (5MB) will cause multipart upload of 6MB file 
-                    MultipartUtils.MIN_PART_SIZE, // Use multipart upload if the object is at least this many bytes
-                    new org.apache.hadoop.conf.Configuration(),
-                    true,
-                    null);
-            
-            // The first time we run a backup, the file should be copied over.
-            HBackup hbackup;
-            hbackup = new HBackup(conf);
-            hbackup.runWithCheckedExceptions();
-            Assert.assertEquals(1, hbackup.getStats().numFilesSucceeded.get());
-            
-            // If we re-run the backup, the file should be skipped since it's up to date.
-            hbackup = new HBackup(conf);
-            hbackup.runWithCheckedExceptions();
-            Assert.assertEquals(0, hbackup.getStats().numFilesSucceeded.get());
-            Assert.assertEquals(1, hbackup.getStats().numUpToDateFilesSkipped.get());
-            
-        } finally {
-            if(hdfsCluster != null) {
-                TestUtil.shutdownMiniDfs(hdfsCluster);
-            }
-        }
+        FileSystem fs = dfsCluster.getFileSystem();
+        String filename = "/one_k_file.txt";
+        OutputStream os = fs.create(new Path(filename));
+        os.write(oneKBuf);
+        os.close();
+        
+        deleteLater(sinkService, sinkBucket, filename);
+        
+        String sourceUri = "hdfs://localhost:" + dfsCluster.getNameNodePort() + filename; 
+        
+        SystemConfiguration sysProps = new SystemConfiguration();
+        HBackupConfig conf = new HBackupConfig(
+                sourceUri,
+                "s3://" + sinkBucket + "/prefix",
+                2,
+                true,
+                null,
+                null,
+                sysProps.getString(HBackupConfig.CONF_SINKS3ACCESSKEY), 
+                sysProps.getString(HBackupConfig.CONF_SINKS3SECRET),
+                MultipartUtils.MIN_PART_SIZE, // Smallest part size (5MB) will cause multipart upload of 6MB file 
+                MultipartUtils.MIN_PART_SIZE, // Use multipart upload if the object is at least this many bytes
+                new org.apache.hadoop.conf.Configuration(),
+                true,
+                null);
+        
+        // The first time we run a backup, the file should be copied over.
+        HBackup hbackup;
+        hbackup = new HBackup(conf);
+        hbackup.runWithCheckedExceptions();
+        Assert.assertEquals(1, hbackup.getStats().numFilesSucceeded.get());
+        
+        // If we re-run the backup, the file should be skipped since it's up to date.
+        hbackup = new HBackup(conf);
+        hbackup.runWithCheckedExceptions();
+        Assert.assertEquals(0, hbackup.getStats().numFilesSucceeded.get());
+        Assert.assertEquals(1, hbackup.getStats().numUpToDateFilesSkipped.get());
     }
     
-    public static void verifyS3Obj(S3Service service, String bucket, String key, byte[] contents) 
-            throws Exception {
-        @SuppressWarnings("unused")
-        S3Object[] listing = service.listObjects(bucket);
-        S3Object s3Obj = service.getObject(bucket, key);
-        InputStream is = s3Obj.getDataInputStream(); 
-        int objSize = (int)s3Obj.getContentLength();
-        if(objSize <= 0) {
-            Assert.fail("S3 input stream had no bytes available to verify");
-        }
-        Assert.assertEquals(contents.length, objSize);
-        TestUtil.assertStreamEquals(contents, is);
+    @Test
+    public void emptyFileS3ToHdfs() throws Exception {
+        String filename = "empty_file.txt";
+        byte[] contents = new byte[] {};
+        deleteLater(sourceService, sourceBucket, filename);
+        sourceService.putObject(sourceBucket, new S3Object(filename, contents));
+        TestUtil.verifyS3Obj(sourceService, sourceBucket, filename, contents);
+        
+        TestUtil.runBackup("s3://" + sourceBucket, "hdfs://localhost:" + dfsCluster.getNameNodePort());
+        TestUtil.verifyHdfsContents(dfsCluster.getFileSystem(), filename, "");
     }
+
     
     public static void runBackup(String from, String to) throws Exception {
         HBackupConfig conf = HBackupConfig.forTests(from, to);

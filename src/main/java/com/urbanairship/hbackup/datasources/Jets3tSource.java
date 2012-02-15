@@ -37,14 +37,21 @@ public class Jets3tSource extends Source {
 //        this.conf = conf;
         this.stats = stats;
         this.bucketName = uri.getHost();
-        String uriPath = uri.getPath();
-        if(uriPath.startsWith("/")) {
-            this.baseName = uriPath.substring(1);            
-        } else {
-            this.baseName = uriPath;
-        }
         
-//        AWSCredentials awsCreds = new AWSCredentials(conf.sinkS3AccessKey, conf.sinkS3Secret);
+        // The basename should consist of zero or more repetitions of "somestring/".
+        // Specifically:
+        //   1. Leading slashes are not allowed
+        //   2. Trailing slashes are required except in the case of "/" by itself.
+        
+        String tempBaseName = uri.getPath();
+        if(!tempBaseName.endsWith("/")) {
+            tempBaseName = tempBaseName + "/";
+        }
+        while(tempBaseName.startsWith("/")) {
+            tempBaseName = tempBaseName.substring(1);            
+        }
+        this.baseName = tempBaseName;
+        
         try {
             s3Service = new RestS3Service(conf.s3SourceCredentials);
         } catch (S3ServiceException e) {
@@ -54,19 +61,17 @@ public class Jets3tSource extends Source {
 
     @Override
     public List<HBFile> getFiles(boolean recursive) throws IOException {
-        String prefix = baseName.endsWith("/") ? baseName : baseName + "/"; // Ensure prefix ends with "/"
+//        String prefix = baseName.endsWith("/") ? baseName : baseName + "/"; // Ensure prefix ends with "/"
         List<HBFile> outFiles = new ArrayList<HBFile>();
         try {
-            S3Object[] listing = s3Service.listObjects(bucketName, prefix, null);
+            S3Object[] listing = s3Service.listObjects(bucketName, baseName, null);
             for(S3Object s3Obj: listing) {
-                if(s3Obj.getContentLength() > 0) {
-                    // Get the "file name" relative to the hbackup source "directory"
-                    String relativePath = s3Obj.getKey().substring(baseName.length());
-                    if(relativePath.startsWith("/")) {
-                        relativePath = relativePath.substring(1);
-                    }
-                    outFiles.add(new Jets3tSourceFile(s3Obj, relativePath));
+                // Get the "file name" relative to the hbackup source "directory"
+                String relativePath = s3Obj.getKey().substring(baseName.length());
+                if(relativePath.startsWith("/")) {
+                    relativePath = relativePath.substring(1);
                 }
+                outFiles.add(new Jets3tSourceFile(s3Obj, relativePath));
             }
             return outFiles;
         } catch (S3ServiceException e) {

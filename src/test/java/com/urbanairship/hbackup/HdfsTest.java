@@ -1,7 +1,6 @@
 package com.urbanairship.hbackup;
 
 import java.io.File;
-import java.io.InputStream;
 import java.io.OutputStream;
 
 import junit.framework.Assert;
@@ -80,7 +79,7 @@ public class HdfsTest {
         
         FileStatus[] listing = sinkFs.listStatus(new Path("/"));
         Assert.assertTrue(sinkFs.exists(new Path("/copydest/myfile.txt")));
-        verifyContents(sinkFs, "/copydest/myfile.txt", FILE_CONTENTS);
+        TestUtil.verifyHdfsContents(sinkFs, "/copydest/myfile.txt", FILE_CONTENTS);
     }
     
     /**
@@ -95,13 +94,13 @@ public class HdfsTest {
         
         // Set up file in source to be backed up
         writeFile(srcFs, sourceName, initialContents);
-        verifyContents(srcFs, sourceName, initialContents);
+        TestUtil.verifyHdfsContents(srcFs, sourceName, initialContents);
         
         // Backup from source to dest and verify that it worked
         String source = getSourceUrl("/from");
         String dest = getSinkUrl("/to");
         TestUtil.runBackup(source, dest);
-        verifyContents(sinkFs, sinkName, initialContents);
+        TestUtil.verifyHdfsContents(sinkFs, sinkName, initialContents);
         
         // Verify that the sink file has the same mtime as the source file
         long sourceMtime = srcFs.getFileStatus(new Path(sourceName)).getModificationTime();
@@ -111,7 +110,7 @@ public class HdfsTest {
         // Modify the source file and run another backup. The destination should pick up the change.
         writeFile(srcFs, sourceName, modifiedContents);
         TestUtil.runBackup(getSourceUrl("/from"), getSinkUrl("/to"));
-        verifyContents(sinkFs, sinkName, modifiedContents);
+        TestUtil.verifyHdfsContents(sinkFs, sinkName, modifiedContents);
     }
     
     /**
@@ -140,30 +139,23 @@ public class HdfsTest {
         HBackup hbackup = new HBackup(conf);
         hbackup.runWithCheckedExceptions();
         Assert.assertEquals(1, hbackup.getStats().numFilesSucceeded.get());
-        verifyContents(sinkFs, "/to/i_do_match.txt", "Taco");
+        TestUtil.verifyHdfsContents(sinkFs, "/to/i_do_match.txt", "Taco");
     }
     
-//    @Test
-//    public void relativePathTest() throws Exception {
-//        public Path path = new Path("hdfs://somefile.txt");
-//        FileSystem fs = FileSystem.get(path.toUri(), srcCluster.);
-//        URI relativeUri = new URI("from/relative.txt");
-//        
-//        String hdfsDefault = "hdfs://localhost" + srcCluster.getNameNodePort() + "/";
-//        
-//        URI absoluteUri = new URI(hdfsDefault).relativize(relativeUri);
-//        int x = 5;
-//    }
+    /**
+     * Make sure that empty files are backed up.
+     */
+    @Test
+    public void emptyFileTest() throws Exception {
+        writeFile(srcFs, "/from/empty.txt", "");
+        TestUtil.runBackup(getSourceUrl("/from"), getSinkUrl("/to"));
+        Assert.assertTrue(sinkFs.exists(new Path("/to/empty.txt")));
+    }
     
     private static void writeFile(FileSystem fs, String path, String contents) throws Exception {
         OutputStream os = fs.create(new Path(path), true);
         os.write(contents.getBytes());
         os.close();
-    }
-    
-    private static void verifyContents(FileSystem fs, String path, String contents) throws Exception {
-        InputStream is = fs.open(new Path(path));
-        TestUtil.assertStreamEquals(contents.getBytes(), is);
     }
     
     private static String getSourceUrl(String dirName) {

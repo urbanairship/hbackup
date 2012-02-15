@@ -4,17 +4,17 @@ import java.io.IOException;
 import java.io.InputStream;
 
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
+import org.jets3t.service.S3Service;
+import org.jets3t.service.model.S3Object;
 import org.junit.Assert;
 
 public abstract class TestUtil {
     private TestUtil() {
         // No instances allowed
     }
-    
-    /**
-     * Only use this for testing. Hackish.
-     */
+
     public static void assertStreamEquals(byte[] expectedContents, InputStream is) throws Exception{
         byte[] buf = new byte[expectedContents.length];
         int bytesRead = 0;
@@ -50,5 +50,29 @@ public abstract class TestUtil {
             }
             FileSystem.closeAll();
         } catch (IOException e) { }
+    }
+        
+    public static void verifyHdfsContents(FileSystem fs, String path, String contents) throws Exception {
+        if(!path.startsWith("/")) {
+            // Never treat paths as relative to home direcotry
+            path = "/" + path;
+        }
+        InputStream is = fs.open(new Path(path));
+        TestUtil.assertStreamEquals(contents.getBytes(), is);
+    }
+    
+    
+    public static void verifyS3Obj(S3Service service, String bucket, String key, byte[] contents) 
+            throws Exception {
+        @SuppressWarnings("unused")
+        S3Object[] listing = service.listObjects(bucket);
+        S3Object s3Obj = service.getObject(bucket, key);
+        InputStream is = s3Obj.getDataInputStream(); 
+        int objSize = (int)s3Obj.getContentLength();
+        if(objSize < 0) {
+            Assert.fail("S3 input stream had no bytes available to verify");
+        }
+        Assert.assertEquals(contents.length, objSize);
+        TestUtil.assertStreamEquals(contents, is);
     }
 }
