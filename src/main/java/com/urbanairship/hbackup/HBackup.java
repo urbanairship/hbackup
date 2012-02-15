@@ -55,8 +55,10 @@ public class HBackup implements Runnable {
         
         Pattern p = null;
         if(conf.includePathsRegex != null) {
-            log.debug("Using input file filter regex " + conf.includePathsRegex);
+            log.debug("Using input path filter regex: " + conf.includePathsRegex);
             p = Pattern.compile(conf.includePathsRegex);
+        } else {
+            log.debug("Not configured for input path pattern matching, skipping");
         }
         
         // Consider all files in the source

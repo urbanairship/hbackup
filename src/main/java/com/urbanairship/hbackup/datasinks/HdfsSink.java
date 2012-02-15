@@ -24,17 +24,22 @@ import com.urbanairship.hbackup.Stats;
 
 public class HdfsSink extends Sink {
     private static final Logger log = LogManager.getLogger(HdfsSink.class);
-    private final URI baseUri;
+//    private final URI baseUri;
+    private String baseUri;
     private final DistributedFileSystem dfs;
     private final Stats stats;
     private final HBackupConfig conf;
     
     public HdfsSink(URI uri, HBackupConfig conf, Stats stats) throws IOException, URISyntaxException {
         this.stats = stats;
-        this.baseUri = uri;
+        if(uri.toString().endsWith("/")) {
+            this.baseUri = uri.toString();
+        } else {
+            this.baseUri = uri.toString() + "/";
+        }
         this.conf = conf;
         org.apache.hadoop.conf.Configuration hadoopConf = new org.apache.hadoop.conf.Configuration();
-        FileSystem fs = FileSystem.get(baseUri, hadoopConf);
+        FileSystem fs = FileSystem.get(uri, hadoopConf);
         if(!(fs instanceof DistributedFileSystem)) {
             throw new RuntimeException("Hadoop FileSystem instance for URI was not an HDFS DistributedFileSystem");
         }
@@ -43,17 +48,30 @@ public class HdfsSink extends Sink {
     
     @Override
     public boolean existsAndUpToDate(HBFile sourceFile) throws IOException {
-        Path path = new Path(baseUri).suffix(sourceFile.getRelativePath());
+        Path path = new Path(baseUri + sourceFile.getRelativePath());
         try {
             FileStatus targetStat = dfs.getFileStatus(path);
             if (sourceFile.getLength() != targetStat.getLen()) {
+                log.debug("Different length in source and sink, will re-upload: " + sourceFile.getRelativePath());
                 return false;
-            } if(conf.mtimeCheck && sourceFile.getMTime() != targetStat.getModificationTime()) {
+            }
+            long sourceMtime = sourceFile.getMTime();
+            long sinkMtime = targetStat.getModificationTime();
+            if(!conf.mtimeCheck) {
+                log.debug("Same lengths and mtime checking disabled. Won't re-upload " + sourceFile.getRelativePath());
+                return true;
+            }
+            if(sourceMtime != sinkMtime) {
+                log.debug("Different mtime source and sink, " + sourceMtime + " vs " + sinkMtime + 
+                        ".  Will re-upload " + sourceFile.getRelativePath());
                 return false;
             } else {
+                log.debug("Lengths and mtimes matched. Won't re-upload " + sourceFile.getRelativePath());
                 return true;
             }
         } catch (FileNotFoundException e) {
+            log.debug("Sink file " + path + " didn't exist for source file " + sourceFile.getRelativePath() +
+                    ". Will re-upload.");
             return false;
         }
     }
@@ -67,12 +85,14 @@ public class HdfsSink extends Sink {
         return ImmutableList.<Runnable>of(new Runnable() {
             @Override
             public void run() {
+                InputStream is = null;
+                FSDataOutputStream os = null;
                 try {
                     String relativePath = sourceFile.getRelativePath();
                     assert !relativePath.startsWith("/");
-                    Path destPath = new Path(baseUri).suffix("/" + relativePath);
-                    InputStream is = sourceFile.getFullInputStream();
-                    FSDataOutputStream os = dfs.create(destPath);
+                    Path destPath = new Path(baseUri + relativePath);
+                    is = sourceFile.getFullInputStream();
+                    os = dfs.create(destPath);
                     IOUtils.copyLarge(is, os);
                     is.close();
                     os.close();
@@ -88,6 +108,18 @@ public class HdfsSink extends Sink {
                     stats.transferExceptions.add(e);
                     stats.numChunksFailed.incrementAndGet();
                     stats.numFilesFailed.incrementAndGet();
+                } finally {
+                    if(is != null) {
+                        try {
+                            is.close();
+                        } catch (IOException e) { }
+                    }
+                    if(os != null) {
+                        try {
+                            os.close();
+                        } catch (IOException e) { }
+                        
+                    }
                 }
             }
         });

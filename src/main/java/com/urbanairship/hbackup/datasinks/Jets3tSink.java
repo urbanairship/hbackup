@@ -78,6 +78,11 @@ public class Jets3tSink extends Sink {
                         " for " + sourceRelativePath + ". Will re-upload.");
                 return false;
             }
+            if(!conf.mtimeCheck) {
+                log.debug("Mtime checking was disabled and filesize matched. Won't reupload " + sourceRelativePath);
+                return true;
+            }
+            
             Object mtimeObj = s3Obj.getMetadata(Constant.S3_SOURCE_MTIME);
             if(mtimeObj == null) {
                 log.debug("Remote object had no source mtime metadata and mtime " + 

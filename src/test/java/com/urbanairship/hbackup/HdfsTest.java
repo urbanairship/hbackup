@@ -11,6 +11,7 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
+import org.jets3t.service.utils.MultipartUtils;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
@@ -97,7 +98,9 @@ public class HdfsTest {
         verifyContents(srcFs, sourceName, initialContents);
         
         // Backup from source to dest and verify that it worked
-        TestUtil.runBackup(getSourceUrl("/from"), getSinkUrl("/to"));
+        String source = getSourceUrl("/from");
+        String dest = getSinkUrl("/to");
+        TestUtil.runBackup(source, dest);
         verifyContents(sinkFs, sinkName, initialContents);
         
         // Verify that the sink file has the same mtime as the source file
@@ -109,6 +112,35 @@ public class HdfsTest {
         writeFile(srcFs, sourceName, modifiedContents);
         TestUtil.runBackup(getSourceUrl("/from"), getSinkUrl("/to"));
         verifyContents(sinkFs, sinkName, modifiedContents);
+    }
+    
+    /**
+     * Test regex file matching by backup up a folder containing two files, one that matches the regex
+     * and one that doesn't.
+     */
+    @Test
+    public void regexTest() throws Exception {
+        writeFile(srcFs, "/from/i_do_match.txt", "Taco");
+        writeFile(srcFs, "/from/i_dont_match.txt", "Burrito");
+        
+        HBackupConfig conf = new HBackupConfig(
+                getSourceUrl("/from"),
+                getSinkUrl("/to"),
+                2,
+                true,
+                null,
+                null,
+                null, 
+                null,
+                MultipartUtils.MIN_PART_SIZE, // Smallest part size (5MB) will cause multipart upload of 6MB file 
+                MultipartUtils.MIN_PART_SIZE, // Use multipart upload if the object is at least this many bytes
+                new org.apache.hadoop.conf.Configuration(),
+                true,
+                ".*do_match.*");
+        HBackup hbackup = new HBackup(conf);
+        hbackup.runWithCheckedExceptions();
+        Assert.assertEquals(1, hbackup.getStats().numFilesSucceeded.get());
+        verifyContents(sinkFs, "/to/i_do_match.txt", "Taco");
     }
     
 //    @Test

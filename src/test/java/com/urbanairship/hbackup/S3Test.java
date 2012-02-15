@@ -36,7 +36,7 @@ import org.junit.Test;
  *  
  *  In maven, you can do: mvn -DargLine="-Dhbackup.x=y -Dhbackup.z=w" test
  */
-public class S3Tests {
+public class S3Test {
     public static final String PROP_CLEARBUCKETS = "hbackup.clearTestBuckets"; 
     
     private List<ObjToDelete> toDelete = new ArrayList<ObjToDelete>();
@@ -184,7 +184,7 @@ public class S3Tests {
         deleteLater(sinkService, sinkBucket, sinkKey);
 
         sourceService.putObject(sourceBucket, new S3Object(sourceKey, sixMegBuf));
-        S3Tests.verifyS3Obj(sourceService, sourceBucket, sourceKey, sixMegBuf);
+        S3Test.verifyS3Obj(sourceService, sourceBucket, sourceKey, sixMegBuf);
         
         String sourceUri = "s3://"+sourceBucket+"/"+sourceDir;
         String sinkUri = "s3://"+sinkBucket+"/"+sinkDir; 
@@ -204,7 +204,7 @@ public class S3Tests {
                 true,
                 null);
         new HBackup(conf).runWithCheckedExceptions();
-        S3Tests.verifyS3Obj(sinkService, sinkBucket, sinkKey, sixMegBuf);
+        S3Test.verifyS3Obj(sinkService, sinkBucket, sinkKey, sixMegBuf);
         
         // Get the metadata for the uploaded object and make sure the source mtime metadata was set
         long sourceMtime = sourceService.getObject(sourceBucket, sourceKey).getLastModifiedDate().getTime();
@@ -214,6 +214,8 @@ public class S3Tests {
     
     @Test
     public void multipartHdfsToS3Test() throws Exception {
+        Assume.assumeTrue(Boolean.valueOf(System.getProperty("hbackup.expensiveTests")));
+
         // Generate six megs of random bytes to upload to S3. We need six megs because the smallest
         // allowed part size is 5 megs.
         
@@ -251,7 +253,7 @@ public class S3Tests {
                     true,
                     null);
             new HBackup(conf).runWithCheckedExceptions();
-            S3Tests.verifyS3Obj(sinkService, sinkBucket, key, sixMegBuf);
+            S3Test.verifyS3Obj(sinkService, sinkBucket, key, sixMegBuf);
             
         } finally {
             if(hdfsCluster != null) {
