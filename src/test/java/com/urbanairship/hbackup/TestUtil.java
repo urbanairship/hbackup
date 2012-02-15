@@ -66,13 +66,23 @@ public abstract class TestUtil {
             throws Exception {
         @SuppressWarnings("unused")
         S3Object[] listing = service.listObjects(bucket);
-        S3Object s3Obj = service.getObject(bucket, key);
-        InputStream is = s3Obj.getDataInputStream(); 
-        int objSize = (int)s3Obj.getContentLength();
-        if(objSize < 0) {
-            Assert.fail("S3 input stream had no bytes available to verify");
+        S3Object s3Obj = null;
+        try {
+            s3Obj = service.getObject(bucket, key);
+            InputStream is = s3Obj.getDataInputStream(); 
+            int objSize = (int)s3Obj.getContentLength();
+            if(objSize < 0) {
+                Assert.fail("S3 input stream had no bytes available to verify");
+            }
+            Assert.assertEquals(contents.length, objSize);
+            TestUtil.assertStreamEquals(contents, is);
+        } finally {
+            if(s3Obj != null) {
+                InputStream is = s3Obj.getDataInputStream();
+                if(is != null) {
+                    is.close();
+                } 
+            }
         }
-        Assert.assertEquals(contents.length, objSize);
-        TestUtil.assertStreamEquals(contents, is);
     }
 }

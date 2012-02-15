@@ -168,7 +168,7 @@ public class S3Test {
         TestUtil.verifyS3Obj(sinkService, sinkBucket, sinkKey, initialContents.getBytes());
         
         // Get the metadata for the uploaded object and make sure the source mtime metadata was set
-        long sourceMtime = sourceService.getObject(sourceBucket, sourceKey).getLastModifiedDate().getTime();
+        long sourceMtime = sourceService.getObjectDetails(sourceBucket, sourceKey).getLastModifiedDate().getTime();
         Map<String,Object> metadata = sinkService.getObjectDetails(sinkBucket, sinkKey).getMetadataMap();
         long sinkMtimeSource = Long.valueOf((String)(metadata.get(Constant.S3_SOURCE_MTIME)));
         Assert.assertEquals(sourceMtime, sinkMtimeSource);
@@ -223,8 +223,8 @@ public class S3Test {
         TestUtil.verifyS3Obj(sinkService, sinkBucket, sinkKey, sixMegBuf);
         
         // Get the metadata for the uploaded object and make sure the source mtime metadata was set
-        long sourceMtime = sourceService.getObject(sourceBucket, sourceKey).getLastModifiedDate().getTime();
-        long sinkMtimeSource = Long.valueOf((String)sinkService.getObject(sinkBucket, sinkKey).getMetadata(Constant.S3_SOURCE_MTIME));
+        long sourceMtime = sourceService.getObjectDetails(sourceBucket, sourceKey).getLastModifiedDate().getTime();
+        long sinkMtimeSource = Long.valueOf((String)sinkService.getObjectDetails(sinkBucket, sinkKey).getMetadata(Constant.S3_SOURCE_MTIME));
         Assert.assertEquals(sourceMtime, sinkMtimeSource);
     }
     
