@@ -286,7 +286,6 @@ public class Jets3tSink extends Sink {
                             sourceStream = file.getFullInputStream();
                             XorInputStream xis = new XorInputStream(sourceStream, 0);
                             s3Obj.setDataInputStream(xis);
-                            s3Obj.setContentLength(file.getLength());
                             s3Service.putObject(bucketName, s3Obj);
                             log.debug("Finished regular non-multipart S3 upload of " + relativePath);
                             stats.numChunksSucceeded.incrementAndGet();
