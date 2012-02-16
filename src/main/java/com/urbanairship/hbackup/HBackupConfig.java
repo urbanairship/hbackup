@@ -29,6 +29,7 @@ public class HBackupConfig {
     public static final String CONF_S3MULTIPARTTHRESHOLD = "hbackup.s3.multipartThreshold";
     public static final String CONF_MTIMECHECK = "hbackup.mtimecheck";
     public static final String CONF_INCLUDEPATHSREGEX = "hbackup.includePathsRegex";
+    public static final String CONF_S3CHECKSUMS = "hbackup.s3Checksums";
     
     public static final int DEFAULT_CONCURRENT_FILES = 5;
     public static final long DEFAULT_S3_PART_SIZE = MultipartUtils.MIN_PART_SIZE;
@@ -48,12 +49,13 @@ public class HBackupConfig {
     public final org.apache.hadoop.conf.Configuration hadoopConf;
     public final boolean mtimeCheck;
     public final String includePathsRegex;
+    public final String s3Checksums;
     
     public HBackupConfig(String from, String to, int concurrentFiles, boolean recursive, 
             String sourceS3AccessKey, String sourceS3Secret, String sinkS3AccessKey, String sinkS3Secret,
             long s3PartSize, long s3MultipartThreshold, 
             org.apache.hadoop.conf.Configuration hadoopConf, boolean mtimeCheck,
-            String includePathsRegex) {
+            String includePathsRegex, String s3Checksums) {
         if(from == null || to == null) {
             throw new IllegalArgumentException("from and to cannot be null");
         }
@@ -76,6 +78,7 @@ public class HBackupConfig {
         this.hadoopConf = hadoopConf;
         this.mtimeCheck = mtimeCheck;
         this.includePathsRegex = includePathsRegex;
+        this.s3Checksums = s3Checksums;
         
         if(sourceS3AccessKey != null && sourceS3Secret != null) {
             this.s3SourceCredentials = new AWSCredentials(sourceS3AccessKey, sourceS3Secret);
@@ -109,6 +112,7 @@ public class HBackupConfig {
                 DEFAULT_S3_MULTIPART_THRESHOLD, 
                 new org.apache.hadoop.conf.Configuration(),
                 true,
+                null,
                 null);
     }
 
@@ -182,7 +186,8 @@ public class HBackupConfig {
                 conf.getLong(CONF_S3MULTIPARTTHRESHOLD, DEFAULT_S3_MULTIPART_THRESHOLD),
                 new org.apache.hadoop.conf.Configuration(true),
                 conf.getBoolean(CONF_MTIMECHECK, DEFAULT_MTIMECHECK),
-                conf.getString(CONF_INCLUDEPATHSREGEX, null));
+                conf.getString(CONF_INCLUDEPATHSREGEX, null),
+                conf.getString(CONF_S3CHECKSUMS, null));
     }
     
     final public static OptHelp[] optHelps = new OptHelp[] {

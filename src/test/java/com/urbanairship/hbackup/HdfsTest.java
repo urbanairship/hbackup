@@ -135,7 +135,8 @@ public class HdfsTest {
                 MultipartUtils.MIN_PART_SIZE, // Use multipart upload if the object is at least this many bytes
                 new org.apache.hadoop.conf.Configuration(),
                 true,
-                ".*do_match.*");
+                ".*do_match.*",
+                null);
         HBackup hbackup = new HBackup(conf);
         hbackup.runWithCheckedExceptions();
         Assert.assertEquals(1, hbackup.getStats().numFilesSucceeded.get());

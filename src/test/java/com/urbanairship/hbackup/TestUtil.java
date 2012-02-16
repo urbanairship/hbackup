@@ -78,10 +78,7 @@ public abstract class TestUtil {
             TestUtil.assertStreamEquals(contents, is);
         } finally {
             if(s3Obj != null) {
-                InputStream is = s3Obj.getDataInputStream();
-                if(is != null) {
-                    is.close();
-                } 
+                s3Obj.closeDataInputStream(); 
             }
         }
     }

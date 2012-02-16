@@ -182,13 +182,8 @@ public class S3Test {
     
     @Test
     public void multipartTest() throws Exception {
-        // Generate six megs of random bytes to upload to S3. We need six megs because the smallest
-        // allowed part size is 5 megs.
-        Random rng = new Random(0);
-        byte[] sixMegBuf = new byte[6 * 1024 * 1024];
-        rng.nextBytes(sixMegBuf);
-        assert sixMegBuf.length >= MultipartUtils.MIN_PART_SIZE;
-        
+        byte[] sixMegBuf = getRandomBuf(6*1024*1024);
+
         String filename = "mptest.txt";
         String sourceDir = "from";
         String sinkDir = "to";
@@ -218,6 +213,7 @@ public class S3Test {
                 MultipartUtils.MIN_PART_SIZE, // Use multipart upload if the object is at least this many bytes
                 new org.apache.hadoop.conf.Configuration(),
                 true,
+                null,
                 null);
         new HBackup(conf).runWithCheckedExceptions();
         TestUtil.verifyS3Obj(sinkService, sinkBucket, sinkKey, sixMegBuf);
@@ -230,14 +226,8 @@ public class S3Test {
     
     @Test
     public void multipartHdfsToS3Test() throws Exception {
-        // Generate six megs of random bytes to upload to S3. We need six megs because the smallest
-        // allowed part size is 5 megs.
+        byte[] sixMegBuf = getRandomBuf(6*1024*1024);
         
-        Random rng = new Random(0);
-        byte[] sixMegBuf = new byte[6 * 1024 * 1024];
-        rng.nextBytes(sixMegBuf);
-        assert sixMegBuf.length >= MultipartUtils.MIN_PART_SIZE;
-
         FileSystem fs = dfsCluster.getFileSystem();
         OutputStream os = fs.create(new Path("/sixmegfile.txt"));
         os.write(sixMegBuf);
@@ -262,6 +252,7 @@ public class S3Test {
                 MultipartUtils.MIN_PART_SIZE, // Use multipart upload if the object is at least this many bytes
                 new org.apache.hadoop.conf.Configuration(),
                 true,
+                null,
                 null);
         new HBackup(conf).runWithCheckedExceptions();
         TestUtil.verifyS3Obj(sinkService, sinkBucket, key, sixMegBuf);
@@ -273,12 +264,7 @@ public class S3Test {
      */
     @Test
     public void hdfsToS3MtimeTest() throws Exception {
-        // Generate six megs of random bytes to upload to S3. We need six megs because the smallest
-        // allowed part size is 5 megs.
-        
-        Random rng = new Random(0);
-        byte[] oneKBuf = new byte[1024];
-        rng.nextBytes(oneKBuf);
+        byte[] oneKBuf = getRandomBuf(1024);
 
         FileSystem fs = dfsCluster.getFileSystem();
         String filename = "/one_k_file.txt";
@@ -304,6 +290,7 @@ public class S3Test {
                 MultipartUtils.MIN_PART_SIZE, // Use multipart upload if the object is at least this many bytes
                 new org.apache.hadoop.conf.Configuration(),
                 true,
+                null,
                 null);
         
         // The first time we run a backup, the file should be copied over.
@@ -330,8 +317,76 @@ public class S3Test {
         TestUtil.runBackup("s3://" + sourceBucket, "hdfs://localhost:" + dfsCluster.getNameNodePort());
         TestUtil.verifyHdfsContents(dfsCluster.getFileSystem(), filename, "");
     }
-
     
+    @Test
+    public void simpleChecksumTest() throws Exception {
+        String filename = "abc.txt";
+        String contents = "abc";
+        
+        deleteLater(sourceService, sourceBucket, filename);
+        deleteLater(sinkService, sinkBucket, filename);
+        sourceService.putObject(sourceBucket, new S3Object(filename, contents));
+        TestUtil.verifyS3Obj(sourceService, sourceBucket, filename, contents.getBytes());
+        
+        SystemConfiguration sysProps = new SystemConfiguration();
+        HBackupConfig conf = new HBackupConfig(
+                "s3://" + sourceBucket,
+                "s3://" + sinkBucket,
+                2,
+                true,
+                sysProps.getString(HBackupConfig.CONF_SOURCES3ACCESSKEY), 
+                sysProps.getString(HBackupConfig.CONF_SOURCES3SECRET),
+                sysProps.getString(HBackupConfig.CONF_SINKS3ACCESSKEY), 
+                sysProps.getString(HBackupConfig.CONF_SINKS3SECRET),
+                MultipartUtils.MIN_PART_SIZE, // Smallest part size (5MB) will cause multipart upload of 6MB file 
+                MultipartUtils.MIN_PART_SIZE, // Use multipart upload if the object is at least this many bytes
+                new org.apache.hadoop.conf.Configuration(),
+                true,
+                null,
+                "s3://" + sinkBucket + "/hashes");
+        HBackup hBackup;
+        hBackup = new HBackup(conf);
+        hBackup.runWithCheckedExceptions();
+        Assert.assertEquals(1, hBackup.getStats().numFilesSucceeded.get());
+        
+        TestUtil.verifyS3Obj(sinkService, sinkBucket, "hashes/abc.txt",
+                XorStreamTest.expectedXor(contents.getBytes()).getBytes());
+    }
+    
+    @Test
+    public void multipartChecksumTest() throws Exception {
+        String filename = "bigrandom.txt";
+        byte[] contents = getRandomBuf(6 * 1024 * 1024);
+        
+        deleteLater(sourceService, sourceBucket, filename);
+        deleteLater(sinkService, sinkBucket, filename);
+        sourceService.putObject(sourceBucket, new S3Object(filename, contents));
+        
+        SystemConfiguration sysProps = new SystemConfiguration();
+        HBackupConfig conf = new HBackupConfig(
+                "s3://" + sourceBucket,
+                "s3://" + sinkBucket,
+                2,
+                true,
+                sysProps.getString(HBackupConfig.CONF_SOURCES3ACCESSKEY), 
+                sysProps.getString(HBackupConfig.CONF_SOURCES3SECRET),
+                sysProps.getString(HBackupConfig.CONF_SINKS3ACCESSKEY), 
+                sysProps.getString(HBackupConfig.CONF_SINKS3SECRET),
+                MultipartUtils.MIN_PART_SIZE, // Smallest part size (5MB) will cause multipart upload of 6MB file 
+                MultipartUtils.MIN_PART_SIZE, // Use multipart upload if the object is at least this many bytes
+                new org.apache.hadoop.conf.Configuration(),
+                true,
+                null,
+                "s3://" + sinkBucket + "/hashes");
+        HBackup hBackup;
+        hBackup = new HBackup(conf);
+        hBackup.runWithCheckedExceptions();
+        Assert.assertEquals(1, hBackup.getStats().numFilesSucceeded.get());
+        
+        TestUtil.verifyS3Obj(sinkService, sinkBucket, "hashes/bigrandom.txt",
+                XorStreamTest.expectedXor(contents).getBytes());
+    }
+
     public static void runBackup(String from, String to) throws Exception {
         HBackupConfig conf = HBackupConfig.forTests(from, to);
         new HBackup(conf).runWithCheckedExceptions();
@@ -355,5 +410,12 @@ public class S3Test {
             this.bucket = bucket;
             this.key = key;
         }
+    }
+    
+    static byte[] getRandomBuf(int size) {
+        Random rng = new Random(0);
+        byte[] buf = new byte[size];
+        rng.nextBytes(buf);
+        return buf;
     }
 }
