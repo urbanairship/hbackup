@@ -11,11 +11,7 @@ public class StreamingXor {
 
     private final byte[] xorSoFar = new byte[HASH_BYTES];
     private final boolean[] haveSeenByteForModulo = new boolean[HASH_BYTES]; // default boolean is false
-//    
-//    public byte[] getXor() {
-//        return xorSoFar;
-//    }
-// 
+
     protected void updateXor(byte b, long offset) {
         int whichByteToUpdate = (int)(offset % HASH_BYTES);
        

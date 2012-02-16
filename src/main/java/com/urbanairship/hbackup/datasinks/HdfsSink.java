@@ -24,7 +24,6 @@ import com.urbanairship.hbackup.Stats;
 
 public class HdfsSink extends Sink {
     private static final Logger log = LogManager.getLogger(HdfsSink.class);
-//    private final URI baseUri;
     private final String baseName;
     private final DistributedFileSystem dfs;
     private final Stats stats;

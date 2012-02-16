@@ -24,17 +24,12 @@ import com.urbanairship.hbackup.Stats;
 public class Jets3tSource extends Source {
     private static final Logger log = LogManager.getLogger(Jets3tSource.class);
     
-//    private final URI baseUri;
-//    private final HBackupConfig conf;
-//    private final AWSCredentials awsCreds;
     private final S3Service s3Service;
     private final String bucketName;
     private final String baseName;
     private final Stats stats;
     
     public Jets3tSource(URI uri, HBackupConfig conf, Stats stats) throws IOException {
-//        this.baseUri = uri;
-//        this.conf = conf;
         this.stats = stats;
         this.bucketName = uri.getHost();
         
@@ -61,7 +56,6 @@ public class Jets3tSource extends Source {
 
     @Override
     public List<HBFile> getFiles(boolean recursive) throws IOException {
-//        String prefix = baseName.endsWith("/") ? baseName : baseName + "/"; // Ensure prefix ends with "/"
         List<HBFile> outFiles = new ArrayList<HBFile>();
         try {
             S3Object[] listing = s3Service.listObjects(bucketName, baseName, null);
@@ -118,7 +112,6 @@ public class Jets3tSource extends Source {
     
         @Override
         public long getMTime() throws IOException {
-//            return new DateTime(s3Obj.getLastModifiedDate(), DateTimeZone.UTC).getMillis();
             try {
                 StorageObject detailsObj = s3Service.getObjectDetails(s3Obj.getBucketName(), s3Obj.getKey());
                 Object metadataObj = detailsObj.getMetadata(Constant.S3_SOURCE_MTIME);
@@ -149,6 +142,5 @@ public class Jets3tSource extends Source {
         public long getLength() {
             return s3Obj.getContentLength();
         }
-
     }
 }

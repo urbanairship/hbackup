@@ -3,6 +3,9 @@ package com.urbanairship.hbackup;
 import java.io.IOException;
 import java.io.InputStream;
 
+/**
+ * This input stream wraps another input stream and keeps track of a running XOR of its bytes.
+ */
 public class XorInputStream extends InputStream {
     private final InputStream wrapStream;
     

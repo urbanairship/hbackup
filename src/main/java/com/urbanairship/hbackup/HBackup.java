@@ -16,7 +16,6 @@ import org.apache.log4j.Logger;
 import com.urbanairship.hbackup.HBackupConfig.OptHelp;
 
 // TODO:
-//  Don't require credentials for public buckets
 //  Allow non-recursive S3 sources
 
 /**
