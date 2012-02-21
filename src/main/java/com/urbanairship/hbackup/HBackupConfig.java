@@ -29,13 +29,17 @@ public class HBackupConfig {
     public static final String CONF_S3MULTIPARTTHRESHOLD = "hbackup.s3.multipartThreshold";
     public static final String CONF_MTIMECHECK = "hbackup.mtimecheck";
     public static final String CONF_INCLUDEPATHSREGEX = "hbackup.includePathsRegex";
-    public static final String CONF_S3CHECKSUMS = "hbackup.s3Checksums";
+    public static final String CONF_CHECKSUMURI = "hbackup.checksumUri";
+    public static final String CONF_CHUNKRETRIES = "hbackup.chunkRetries";
+    public static final String CONF_CHECKSUMS3ACCESSKEY = "hbackup.checksumS3AccessKey";
+    public static final String CONF_CHECKSUMS3SECRET = "hbackup.checksumS3Secret";
     
     public static final int DEFAULT_CONCURRENT_FILES = 5;
-    public static final long DEFAULT_S3_PART_SIZE = MultipartUtils.MIN_PART_SIZE;
+    public static final long DEFAULT_S3_PART_SIZE = MultipartUtils.MIN_PART_SIZE; // small chunks => high concurrency
     public static final int DEFAULT_S3_MULTIPART_THRESHOLD = 100 * 1024 * 1024;
     public static final boolean DEFAULT_MTIMECHECK = true;
     public static final boolean DEFAULT_RECURSIVE = true;
+    public static final int DEFAULT_CHUNKRETRIES = 4;
     
     // Config values
     public final String from;
@@ -44,18 +48,21 @@ public class HBackupConfig {
     public final boolean recursive;
     public final AWSCredentials s3SourceCredentials;
     public final AWSCredentials s3SinkCredentials;
+    public final AWSCredentials s3ChecksumCredentials;
     public final long s3PartSize;
     public final long s3MultipartThreshold;
     public final org.apache.hadoop.conf.Configuration hadoopConf;
     public final boolean mtimeCheck;
     public final String includePathsRegex;
-    public final String s3Checksums;
+    public final String checksumUri;
+    public final int chunkRetries;
     
     public HBackupConfig(String from, String to, int concurrentFiles, boolean recursive, 
             String sourceS3AccessKey, String sourceS3Secret, String sinkS3AccessKey, String sinkS3Secret,
             long s3PartSize, long s3MultipartThreshold, 
             org.apache.hadoop.conf.Configuration hadoopConf, boolean mtimeCheck,
-            String includePathsRegex, String s3Checksums) {
+            String includePathsRegex, String checksumUri, int chunkRetries,
+            String checksumS3AccessKey, String checksumS3Secret) {
         if(from == null || to == null) {
             throw new IllegalArgumentException("from and to cannot be null");
         }
@@ -78,7 +85,8 @@ public class HBackupConfig {
         this.hadoopConf = hadoopConf;
         this.mtimeCheck = mtimeCheck;
         this.includePathsRegex = includePathsRegex;
-        this.s3Checksums = s3Checksums;
+        this.checksumUri = checksumUri;
+        this.chunkRetries = chunkRetries;
         
         if(sourceS3AccessKey != null && sourceS3Secret != null) {
             this.s3SourceCredentials = new AWSCredentials(sourceS3AccessKey, sourceS3Secret);
@@ -90,6 +98,12 @@ public class HBackupConfig {
             this.s3SinkCredentials = new AWSCredentials(sinkS3AccessKey, sinkS3Secret);
         } else {
             this.s3SinkCredentials = null;
+        }
+
+        if(checksumS3AccessKey != null && checksumS3Secret!= null) {
+            this.s3ChecksumCredentials = new AWSCredentials(checksumS3AccessKey, checksumS3Secret);
+        } else {
+            this.s3ChecksumCredentials = null;
         }
     }
 
@@ -112,6 +126,9 @@ public class HBackupConfig {
                 DEFAULT_S3_MULTIPART_THRESHOLD, 
                 new org.apache.hadoop.conf.Configuration(),
                 true,
+                null,
+                null,
+                0, // Any retries would probably make test failures more confusing
                 null,
                 null);
     }
@@ -187,7 +204,10 @@ public class HBackupConfig {
                 new org.apache.hadoop.conf.Configuration(true),
                 conf.getBoolean(CONF_MTIMECHECK, DEFAULT_MTIMECHECK),
                 conf.getString(CONF_INCLUDEPATHSREGEX, null),
-                conf.getString(CONF_S3CHECKSUMS, null));
+                conf.getString(CONF_CHECKSUMURI, null),
+                conf.getInt(CONF_CHUNKRETRIES, DEFAULT_CHUNKRETRIES),
+                conf.getString(CONF_CHECKSUMS3ACCESSKEY, null),
+                conf.getString(CONF_CHECKSUMS3SECRET, null));
     }
     
     final public static OptHelp[] optHelps = new OptHelp[] {
@@ -205,7 +225,10 @@ public class HBackupConfig {
                     Long.toString(DEFAULT_S3_MULTIPART_THRESHOLD)),
             new OptHelp(CONF_MTIMECHECK, "If true, re-transfer files when the source and sink mtime or length differs. "
                     + "If false, ignore the mtime and only check the length.", Boolean.toString(DEFAULT_MTIMECHECK)),
-            new OptHelp(CONF_INCLUDEPATHSREGEX, "If set, only files matching this regex will be sent. Filenames are relative to the backup directory.")
+            new OptHelp(CONF_INCLUDEPATHSREGEX, "If set, only files matching this regex will be sent. Filenames are relative to the backup directory."),
+            new OptHelp(CONF_CHECKSUMURI, "Where file checksums should be stored"),
+            new OptHelp(CONF_CHECKSUMS3ACCESSKEY, "If the checksums are stored in a protected S3 bucket, specify the access key"),
+            new OptHelp(CONF_CHECKSUMS3SECRET, "If the checksums are stored in a protected S3 bucket, specify the secret"),
     };
     
     public static class OptHelp {

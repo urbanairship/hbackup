@@ -17,21 +17,22 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import com.google.common.collect.ImmutableList;
-import com.urbanairship.hbackup.HBFile;
+import com.urbanairship.hbackup.ChecksumService;
 import com.urbanairship.hbackup.HBackupConfig;
+import com.urbanairship.hbackup.RetryableChunk;
 import com.urbanairship.hbackup.Sink;
+import com.urbanairship.hbackup.SourceFile;
 import com.urbanairship.hbackup.Stats;
+import com.urbanairship.hbackup.StreamingXor;
+import com.urbanairship.hbackup.XorInputStream;
 
 public class HdfsSink extends Sink {
     private static final Logger log = LogManager.getLogger(HdfsSink.class);
     private final String baseName;
     private final DistributedFileSystem dfs;
-    private final Stats stats;
     private final HBackupConfig conf;
     
-    public HdfsSink(URI uri, HBackupConfig conf, Stats stats) throws IOException, URISyntaxException {
-        this.stats = stats;
-        
+    public HdfsSink(URI uri, HBackupConfig conf, Stats stats, ChecksumService checksumService) throws IOException, URISyntaxException {
         String tempBaseName = uri.getPath();
         if(!tempBaseName.startsWith("/")) {
             tempBaseName = "/" + tempBaseName;
@@ -40,7 +41,6 @@ public class HdfsSink extends Sink {
             tempBaseName = tempBaseName + "/";
         }
         this.baseName = tempBaseName;
-        
         this.conf = conf;
         org.apache.hadoop.conf.Configuration hadoopConf = new org.apache.hadoop.conf.Configuration();
         FileSystem fs = FileSystem.get(uri, hadoopConf);
@@ -51,7 +51,7 @@ public class HdfsSink extends Sink {
     }
     
     @Override
-    public boolean existsAndUpToDate(HBFile sourceFile) throws IOException {
+    public boolean existsAndUpToDate(SourceFile sourceFile) throws IOException {
         Path path = new Path(baseName + sourceFile.getRelativePath());
         try {
             FileStatus targetStat = dfs.getFileStatus(path);
@@ -85,33 +85,30 @@ public class HdfsSink extends Sink {
      * as a single chunk, which might be large.
      */
     @Override
-    public List<Runnable> getChunks(final HBFile sourceFile) {
-        return ImmutableList.<Runnable>of(new Runnable() {
+    public List<RetryableChunk> getChunks(final SourceFile sourceFile) {
+        return ImmutableList.<RetryableChunk>of(new RetryableChunk() {
             @Override
-            public void run() {
+            public StreamingXor run() throws IOException {
                 InputStream is = null;
                 FSDataOutputStream os = null;
+                
                 try {
                     String relativePath = sourceFile.getRelativePath();
                     assert !relativePath.startsWith("/");
                     Path destPath = new Path(baseName + relativePath);
                     is = sourceFile.getFullInputStream();
+                    XorInputStream xis = new XorInputStream(is, 0);
                     os = dfs.create(destPath);
-                    IOUtils.copyLarge(is, os);
+                    IOUtils.copyLarge(xis, os);
                     is.close();
                     os.close();
                     
                     // Set the atime and mtime of the sink file equal to the mtime of the source file.
                     dfs.setTimes(destPath, sourceFile.getMTime(), sourceFile.getMTime());
+
+                    log.debug("Done transferring file to HDFS: " + relativePath);
                     
-                    log.debug("Done transferring file: " + relativePath);
-                    stats.numFilesSucceeded.incrementAndGet();
-                    stats.numChunksSucceeded.incrementAndGet();
-                } catch (IOException e) {
-                    log.error(e);
-                    stats.transferExceptions.add(e);
-                    stats.numChunksFailed.incrementAndGet();
-                    stats.numFilesFailed.incrementAndGet();
+                    return xis.getStreamingXor();
                 } finally {
                     if(is != null) {
                         try {
@@ -122,9 +119,13 @@ public class HdfsSink extends Sink {
                         try {
                             os.close();
                         } catch (IOException e) { }
-                        
                     }
                 }
+            }
+
+            @Override
+            public void commitAllChunks() throws IOException {
+                log.debug("Commit noop for HDFS, nothing to do to commit to HDFS");
             }
         });
     }

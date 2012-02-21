@@ -16,7 +16,7 @@ import org.jets3t.service.model.S3Object;
 import org.jets3t.service.model.StorageObject;
 
 import com.urbanairship.hbackup.Constant;
-import com.urbanairship.hbackup.HBFile;
+import com.urbanairship.hbackup.SourceFile;
 import com.urbanairship.hbackup.HBackupConfig;
 import com.urbanairship.hbackup.Source;
 import com.urbanairship.hbackup.Stats;
@@ -27,10 +27,8 @@ public class Jets3tSource extends Source {
     private final S3Service s3Service;
     private final String bucketName;
     private final String baseName;
-    private final Stats stats;
     
     public Jets3tSource(URI uri, HBackupConfig conf, Stats stats) throws IOException {
-        this.stats = stats;
         this.bucketName = uri.getHost();
         
         // The basename should consist of zero or more repetitions of "somestring/".
@@ -55,8 +53,8 @@ public class Jets3tSource extends Source {
     }
 
     @Override
-    public List<HBFile> getFiles(boolean recursive) throws IOException {
-        List<HBFile> outFiles = new ArrayList<HBFile>();
+    public List<SourceFile> getFiles(boolean recursive) throws IOException {
+        List<SourceFile> outFiles = new ArrayList<SourceFile>();
         try {
             S3Object[] listing = s3Service.listObjects(bucketName, baseName, null);
             for(S3Object s3Obj: listing) {
@@ -73,7 +71,7 @@ public class Jets3tSource extends Source {
         }
     }
     
-    private class Jets3tSourceFile extends HBFile {
+    private class Jets3tSourceFile implements SourceFile {
         private final S3Object s3Obj;
         private final String relativePath;
         

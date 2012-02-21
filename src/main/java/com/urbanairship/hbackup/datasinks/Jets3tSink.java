@@ -4,11 +4,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
-import org.apache.hadoop.fs.s3.S3Credentials;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.jets3t.service.S3Service;
@@ -20,12 +19,15 @@ import org.jets3t.service.model.MultipartUpload;
 import org.jets3t.service.model.S3Object;
 import org.jets3t.service.model.StorageObject;
 
+import com.urbanairship.hbackup.ChecksumService;
 import com.urbanairship.hbackup.Constant;
-import com.urbanairship.hbackup.HBFile;
 import com.urbanairship.hbackup.HBackupConfig;
+import com.urbanairship.hbackup.RetryableChunk;
 import com.urbanairship.hbackup.Sink;
+import com.urbanairship.hbackup.SourceFile;
 import com.urbanairship.hbackup.Stats;
 import com.urbanairship.hbackup.StreamingXor;
+import com.urbanairship.hbackup.Util;
 import com.urbanairship.hbackup.XorInputStream;
 
 // TODO only get remote listing once, instead of once per file
@@ -35,27 +37,15 @@ public class Jets3tSink extends Sink {
     private final HBackupConfig conf;
     private final S3Service s3Service;
     private final String bucketName;
-    private final String checksumBucket;
     private final String baseName;
-    private final String checksumBaseName;
-    private final Stats stats;
     
-    public Jets3tSink(URI uri, HBackupConfig conf, Stats stats) throws IOException, URISyntaxException {
-        this.stats = stats;
+    public Jets3tSink(URI uri, HBackupConfig conf, Stats stats, ChecksumService checksumService)  throws IOException, URISyntaxException {
         this.conf = conf;
         this.bucketName = uri.getHost();
         
         // The path component of the incoming URI, which we will prefix onto all outgoing files,
         // must not begin with "/", and must end with "/".
-        this.baseName = canonicalizeBaseName(uri.getPath());
-        if(conf.s3Checksums != null) {
-            URI checksumUri = new URI(conf.s3Checksums);
-            this.checksumBucket = checksumUri.getHost();
-            this.checksumBaseName = canonicalizeBaseName(checksumUri.getPath());
-        } else {
-            this.checksumBucket = null;
-            this.checksumBaseName = null;
-        }
+        this.baseName = Util.canonicalizeBaseName(uri.getPath());
         
         try {
             s3Service = new RestS3Service(conf.s3SinkCredentials);
@@ -64,21 +54,10 @@ public class Jets3tSink extends Sink {
         }
     }
     
-    /**
-     * A canonical base name does not begin with "/", and must end with "/" (except that "/" is invalid).
-     */
-    private String canonicalizeBaseName(String path) {
-        if(!path.endsWith("/")) {
-            path = path + "/";
-        }
-        if(path.startsWith("/")) {
-            path = path.substring(1);            
-        }
-        return path;
-    }
+    
 
     @Override
-    public boolean existsAndUpToDate(HBFile file) throws IOException {
+    public boolean existsAndUpToDate(SourceFile file) throws IOException {
         try {
             String sourceRelativePath = file.getRelativePath();
             assert !sourceRelativePath.startsWith("/");
@@ -137,7 +116,7 @@ public class Jets3tSink extends Sink {
         }
     }
 
-    private static enum MultipartTransferState {BEFORE_INIT, IN_PROGRESS, ERROR, DONE};
+//    private static enum MultipartTransferState {BEFORE_INIT, IN_PROGRESS, ERROR, DONE};
     
     /**
      * This is slightly complicated. The complication arises from coordinating multiple threads
@@ -148,20 +127,17 @@ public class Jets3tSink extends Sink {
      * transfer, and the state machine's state is stored in the "MultipartTransferState state" var.
      */
     private class ChunkWriter {
-        private final HBFile file;
-        private final List<Runnable> chunks;
-
-        MultipartUpload mpUpload;
-        List<MultipartPart> finishedParts = new ArrayList<MultipartPart>();
-        
+        private final SourceFile file;
+        private final List<RetryableChunk> chunks;
+        private final List<MultipartPart> finishedParts = Collections.synchronizedList(new ArrayList<MultipartPart>());
         private final int numChunks;
         private final String destS3Key;
-        final String relativePath;
+        private final String relativePath;
         
-        private MultipartTransferState state = MultipartTransferState.BEFORE_INIT;
-        private StreamingXor checksum = new StreamingXor();
+        private final Object multiPartInitLock = new Object();
+        private MultipartUpload mpUpload = null;
         
-        public ChunkWriter(HBFile hbFile) {
+        public ChunkWriter(SourceFile hbFile) {
              this.file = hbFile;
              relativePath = file.getRelativePath();
              assert !relativePath.startsWith("/");
@@ -170,19 +146,29 @@ public class Jets3tSink extends Sink {
              final long inputLen = file.getLength();
              if(inputLen >= conf.s3MultipartThreshold) {
                  numChunks = (int)(inputLen / conf.s3PartSize + 1);
-                 chunks = new ArrayList<Runnable>(1);
+                 chunks = new ArrayList<RetryableChunk>(1);
                  
                  for(int i=0; i<numChunks; i++) {
                      final long startAt = i * conf.s3PartSize;
                      final long objLen = Math.min(conf.s3PartSize, inputLen - startAt);
                      final int partNum = i;
                      
-                     chunks.add(new Runnable() {
+                     chunks.add(new RetryableChunk() {
                         @Override
-                        public void run() {
+                        public StreamingXor run() throws IOException {
                             InputStream partInputStream = null;
                             try {
-                                MultipartUpload mpUpload = beforeChunk();
+                                synchronized (multiPartInitLock) {
+                                    // Initialize the multipart upload if not already done.
+                                    if(mpUpload == null) {
+                                        S3Object multipartObj = new S3Object(destS3Key);
+                                        // Upload the source file's mtime as S3 metadata. The next time we run a backup,
+                                        // this will tell us whether we should re-upload the file.
+                                        multipartObj.addMetadata(Constant.S3_SOURCE_MTIME, Long.toString(file.getMTime()));
+                                        log.debug("Starting multipart upload for " + relativePath);
+                                        mpUpload = s3Service.multipartStartUpload(bucketName, multipartObj);
+                                    }
+                                }
                                 
                                 partInputStream = file.getPartialInputStream(startAt, objLen);
                                 XorInputStream xis = new XorInputStream(partInputStream, startAt);
@@ -191,11 +177,10 @@ public class Jets3tSink extends Sink {
                                 MultipartPart thisPart = s3Service.multipartUploadPart(mpUpload, partNum+1, 
                                         s3ObjForPart);
                                 assert thisPart.getSize() == objLen;
-                                
-                                chunkSuccess(thisPart, xis.getStreamingXor());
-                            } catch (Exception e) {
-                                chunkError();
-                                stats.transferExceptions.add(e);
+                                finishedParts.add(thisPart);
+                                return xis.getStreamingXor();
+                            } catch (S3ServiceException e) {
+                                throw new IOException(e);
                             } finally {
                                 if(partInputStream != null) {
                                     try {
@@ -204,14 +189,24 @@ public class Jets3tSink extends Sink {
                                 }
                             }
                         }
+
+                        @Override
+                        public void commitAllChunks() throws IOException {
+                            try {
+                                log.info("Multipart upload complete for " + relativePath);
+                                s3Service.multipartCompleteUpload(mpUpload, finishedParts);
+                            } catch (S3ServiceException e) {
+                                throw new IOException(e);
+                            }
+                        }
                      });
                  }
              } else {
                  numChunks = 1;
-                 chunks = new ArrayList<Runnable>(1);
-                 chunks.add(new Runnable() {
+                 chunks = new ArrayList<RetryableChunk>(1);
+                 chunks.add(new RetryableChunk() {
                     @Override
-                    public void run() {
+                    public StreamingXor run() throws IOException {
                         InputStream sourceStream = null;
                         try {
                             log.debug("Starting regular non-multipart S3 upload of " + relativePath);
@@ -222,13 +217,9 @@ public class Jets3tSink extends Sink {
                             s3Obj.setDataInputStream(xis);
                             s3Service.putObject(bucketName, s3Obj);
                             log.debug("Finished regular non-multipart S3 upload of " + relativePath);
-                            stats.numChunksSucceeded.incrementAndGet();
-                            stats.numFilesSucceeded.incrementAndGet();
-                            saveChecksum(xis.getStreamingXor().getXorHex());
-                        } catch (Exception e) {
-                            stats.transferExceptions.add(e);
-                            stats.numFilesFailed.incrementAndGet();
-                            stats.numChunksFailed.incrementAndGet();
+                            return xis.getStreamingXor();
+                        } catch (ServiceException e) {
+                            throw new IOException(e);
                         } finally {
                             if(sourceStream != null) {
                                 try {
@@ -237,6 +228,11 @@ public class Jets3tSink extends Sink {
                             }
                         }
                     }
+
+                    @Override
+                    public void commitAllChunks() throws IOException {
+                        log.debug("Commit noop, nothing to do for simple S3 uploads");
+                    }
                  });
              }
         }
@@ -244,104 +240,13 @@ public class Jets3tSink extends Sink {
         /**
          * Return the chunks (1 or more) that will collectively transfer this file.
          */
-        public List<Runnable> getChunks() {
+        public List<RetryableChunk> getChunks() {
             return chunks;
-        }
-
-        /**
-         * Initializes the multipart transfer if it hasn't already been initialized.
-         * @returns a MultipartUpload if the transfer should go ahead, or null if some other chunk
-         * failed for this file and the chunk should be skipped.
-         */
-        synchronized private MultipartUpload beforeChunk() throws Exception {
-            assert state != MultipartTransferState.DONE;
-            
-            // Some other chunk had an error. Skip transferring the chunk that would be transferred now.
-            if (state == MultipartTransferState.ERROR) {
-                stats.numChunksSkipped.incrementAndGet();
-                return null;
-            }
-            
-            if(state == MultipartTransferState.BEFORE_INIT) {
-                S3Object multipartObj = new S3Object(destS3Key);
-                
-                // Upload the source file's mtime as S3 metadata. The next time we run a backup,
-                // this will tell us whether we should re-upload the file.
-                multipartObj.addMetadata(Constant.S3_SOURCE_MTIME, Long.toString(file.getMTime()));
-                log.debug("Starting multipart upload for " + relativePath);
-                mpUpload = s3Service.multipartStartUpload(bucketName, multipartObj);
-                state = MultipartTransferState.IN_PROGRESS;
-            }
-            
-            return mpUpload;
-        }
-        
-        /**
-         * Finishes and commits the multipart transfer when the last chunk finishes.
-         */
-        synchronized private void chunkSuccess(MultipartPart part, StreamingXor partXor) throws Exception {
-            assert state == MultipartTransferState.IN_PROGRESS;
-            log.debug("Updating checksum for " + relativePath);
-            checksum.update(partXor);
-            log.debug("Multipart chunk succeeded for " + relativePath);
-            finishedParts.add(part);
-            stats.numChunksSucceeded.incrementAndGet();
-            
-            if(finishedParts.size() == numChunks) {
-                saveChecksum(checksum.getXorHex());
-                log.info("Multipart upload complete for " + relativePath);
-                s3Service.multipartCompleteUpload(mpUpload, finishedParts);
-                
-                state = MultipartTransferState.DONE;
-                stats.numFilesSucceeded.incrementAndGet();
-            }
-        }
-        
-        /**
-         * Called when some chunk couldn't be transferred.
-         */
-        synchronized private void chunkError() {
-            assert state == MultipartTransferState.IN_PROGRESS || state == MultipartTransferState.ERROR;
-
-            if(state == MultipartTransferState.IN_PROGRESS) {
-                state = MultipartTransferState.ERROR;
-                stats.numFilesFailed.incrementAndGet();
-                log.debug("Aborting multipart upload of " + relativePath + " due to error");
-                try {
-                    s3Service.multipartAbortUpload(mpUpload);
-                } catch (Exception e) {
-                    log.error("Another error when trying to abort multipart upload", e);
-                }
-            }
-            stats.numChunksFailed.incrementAndGet();
-        }
-        
-        private void saveChecksum(String checksum) throws IOException {
-            if(checksumBucket == null) {
-                log.debug("S3 checksum storage was not configured. Skipping.");
-                return;
-            }
-            S3Object s3Object;
-            try {
-                s3Object = new S3Object(checksumBaseName + relativePath, checksum.getBytes());
-            } catch(NoSuchAlgorithmException e) {
-                throw new RuntimeException(e);
-            }
-            
-            try {
-                s3Service.putObject(checksumBucket, s3Object);
-                log.debug("Saved S3 checksum " + checksum + " for " + relativePath);
-            } catch (S3ServiceException e) {
-                log.error(e);
-                throw new IOException(e);
-            }
         }
     }
     
     @Override
-    public List<Runnable> getChunks(HBFile file) {
+    public List<RetryableChunk> getChunks(SourceFile file) {
         return new ChunkWriter(file).getChunks();
     }
-    
-    
 }

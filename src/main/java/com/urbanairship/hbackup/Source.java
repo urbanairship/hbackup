@@ -29,5 +29,5 @@ public abstract class Source {
     /**
      * Get the list of files present in the source. These are candidates for copying.
      */
-    public abstract List<HBFile> getFiles(boolean recursive) throws IOException;
+    public abstract List<SourceFile> getFiles(boolean recursive) throws IOException;
 }

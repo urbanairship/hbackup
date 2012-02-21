@@ -3,6 +3,7 @@ package com.urbanairship.hbackup;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -17,6 +18,7 @@ import com.urbanairship.hbackup.HBackupConfig.OptHelp;
 
 // TODO:
 //  Allow non-recursive S3 sources
+//  Append mode for resuming failed files when writing to HDFS
 
 /**
  * The main class and client API. Instantiate this class with a backup confguration and call run()
@@ -27,6 +29,7 @@ public class HBackup implements Runnable {
         
     private final Source source;
     private final Sink sink;
+    private final ChecksumService checksumService;
     private final HBackupConfig conf;
     private final Stats stats;
     
@@ -35,6 +38,11 @@ public class HBackup implements Runnable {
         this.stats = new Stats();
         this.source = Source.forUri(new URI(conf.from), conf, stats);
         this.sink = Sink.forUri(new URI(conf.to), conf, stats);
+        if(conf.checksumUri != null) {
+            this.checksumService = ChecksumService.forUri(new URI(conf.checksumUri), conf);
+        } else {
+            this.checksumService = null;
+        }
     }
     
     @Override
@@ -61,7 +69,7 @@ public class HBackup implements Runnable {
         }
         
         // Consider all files in the source
-        for (HBFile file: source.getFiles(conf.recursive)) {
+        for (SourceFile file: source.getFiles(conf.recursive)) {
             // Copy the file unless it's up to date in the sink
             try {
                 String relativePath = file.getRelativePath(); 
@@ -81,11 +89,15 @@ public class HBackup implements Runnable {
                     continue;
                 }
                 
-                log.debug("Queueing file for transfer: " + file.getRelativePath());
                 // Ask the sink how the file should be chunked for transfer
-                for(Runnable r: sink.getChunks(file)) {
+                List<RetryableChunk> chunks = sink.getChunks(file);
+                
+                log.debug("Queueing file for transfer: " + file.getRelativePath());
+                FileTransferState fileState = new FileTransferState(file, chunks.size(), stats);
+                for(RetryableChunk chunk: chunks) {
                     // Enqueue each chunk for transfer
-                    executor.execute(r);
+                    executor.execute(new ChunkRetryer(fileState, chunk, checksumService,
+                            conf.chunkRetries, stats));
                 }
 
             } catch (IOException e) {
@@ -103,9 +115,9 @@ public class HBackup implements Runnable {
         log.info("Chunks failed: " + stats.numChunksFailed.get());
         
         // Re-throw the first exception seen by a worker thread, if any exceptions occurred
-        if(!stats.transferExceptions.isEmpty()) {
+        if(!stats.fileFailureExceptions.isEmpty()) {
             throw new IOException("Re-throwing worker exception from main thread", 
-                    stats.transferExceptions.peek());
+                    stats.fileFailureExceptions.peek());
         }
     }
     

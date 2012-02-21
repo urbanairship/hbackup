@@ -12,5 +12,5 @@ public class Stats {
     public final AtomicInteger numFilesSucceeded = new AtomicInteger(0);
     public final AtomicInteger numChunksSkipped = new AtomicInteger(0);
     
-    public Queue<Exception> transferExceptions = new ConcurrentLinkedQueue<Exception>(); 
+    public Queue<Exception> fileFailureExceptions = new ConcurrentLinkedQueue<Exception>(); 
 }

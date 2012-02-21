@@ -17,7 +17,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import com.google.common.io.LimitInputStream;
-import com.urbanairship.hbackup.HBFile;
+import com.urbanairship.hbackup.SourceFile;
 import com.urbanairship.hbackup.HBackupConfig;
 import com.urbanairship.hbackup.Source;
 import com.urbanairship.hbackup.Stats;
@@ -26,11 +26,9 @@ public class HdfsSource extends Source {
     private static final Logger log = LogManager.getLogger(HdfsSource.class);
     private final DistributedFileSystem dfs;
     private final URI baseUri;
-    private final Stats stats;
     
     public HdfsSource(URI sourceUri, HBackupConfig conf, Stats stats) 
             throws IOException, URISyntaxException {
-        this.stats = stats;
         this.baseUri = sourceUri;
         org.apache.hadoop.conf.Configuration hadoopConf = new org.apache.hadoop.conf.Configuration();
         FileSystem fs = FileSystem.get(baseUri, hadoopConf);
@@ -41,13 +39,13 @@ public class HdfsSource extends Source {
     }
 
     @Override
-    public List<HBFile> getFiles(boolean recursive) throws IOException {
-        List<HBFile> hbFiles = new ArrayList<HBFile>();
+    public List<SourceFile> getFiles(boolean recursive) throws IOException {
+        List<SourceFile> hbFiles = new ArrayList<SourceFile>();
         addFiles(hbFiles, new Path(baseUri), recursive, "");
         return hbFiles;
     }
     
-    private void addFiles(List<HBFile> files, Path path, boolean recursive, String relativeTo) throws IOException {
+    private void addFiles(List<SourceFile> files, Path path, boolean recursive, String relativeTo) throws IOException {
         FileStatus[] listing = dfs.listStatus(path);
         
         if(listing == null) {
@@ -73,9 +71,9 @@ public class HdfsSource extends Source {
     }
     
     /**
-     * An implementation of HBFile that knows how to read from HDFS. 
+     * An implementation of SourceFile that knows how to read from HDFS. 
      */
-    private class HdfsFile extends HBFile {
+    private class HdfsFile implements SourceFile {
         private final FileStatus stat;
         private final DistributedFileSystem dfs;
         private final String relativePath;

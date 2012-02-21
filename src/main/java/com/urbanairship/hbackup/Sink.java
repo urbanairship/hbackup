@@ -16,11 +16,16 @@ public abstract class Sink {
     public static Sink forUri(URI uri, HBackupConfig conf, Stats stats) 
             throws IOException, URISyntaxException {
         String scheme = uri.getScheme();
-        
+
+        ChecksumService checksumService = null;
+        if(conf.checksumUri != null) {
+            checksumService = ChecksumService.forUri(new URI(conf.checksumUri), conf);
+        }
+
         if(scheme.equals("s3")) {
-            return new Jets3tSink(uri, conf, stats);
+            return new Jets3tSink(uri, conf, stats, checksumService);
         } else if (scheme.equals("hdfs")) {
-            return new HdfsSink(uri, conf, stats);
+            return new HdfsSink(uri, conf, stats, checksumService);
         } else {
             throw new IllegalArgumentException("Unknown protocol \"" + scheme + "\" in  URI " + uri);
         }
@@ -35,7 +40,7 @@ public abstract class Sink {
      *  - the target's version of sourceFile has a different length
      *  Otherwise true (the target is up to date). 
      */
-    public abstract boolean existsAndUpToDate(HBFile file) throws IOException;
+    public abstract boolean existsAndUpToDate(SourceFile file) throws IOException;
     
-    public abstract List<Runnable> getChunks(HBFile file);
+    public abstract List<RetryableChunk> getChunks(SourceFile file);
 }

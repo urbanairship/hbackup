@@ -77,7 +77,6 @@ public class HdfsTest {
                 getSinkUrl("/copydest")));
         hBackup.runWithCheckedExceptions();
         
-        FileStatus[] listing = sinkFs.listStatus(new Path("/"));
         Assert.assertTrue(sinkFs.exists(new Path("/copydest/myfile.txt")));
         TestUtil.verifyHdfsContents(sinkFs, "/copydest/myfile.txt", FILE_CONTENTS);
     }
@@ -136,6 +135,9 @@ public class HdfsTest {
                 new org.apache.hadoop.conf.Configuration(),
                 true,
                 ".*do_match.*",
+                null,
+                0,
+                null,
                 null);
         HBackup hbackup = new HBackup(conf);
         hbackup.runWithCheckedExceptions();

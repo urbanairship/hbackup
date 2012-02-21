@@ -3,9 +3,10 @@ package com.urbanairship.hbackup;
 public class FileTransferState {
     private final SourceFile sourceFile;
     private final Stats stats;
+    private final StreamingXor combinedChecksum = new StreamingXor(); 
     
-    public enum State {NOT_STARTED, IN_PROGRESS, ERROR, CHUNKS_COMPLETE, COMMITTED};
-    private State state = State.NOT_STARTED;
+    public enum State {PENDING, ERROR, CHUNKS_COMPLETE, COMMITTED};
+    private State state = State.PENDING;
     private int chunksOutstanding;
     
     public FileTransferState(SourceFile file, int numChunks, Stats stats) {
@@ -23,7 +24,7 @@ public class FileTransferState {
     }
     
     synchronized void chunkError() {
-        if(state != State.IN_PROGRESS && state != State.ERROR) {
+        if(state != State.PENDING && state != State.ERROR) {
             throw new RuntimeException("Invalid state " + state);
         }
 
@@ -39,8 +40,9 @@ public class FileTransferState {
      * @return whether all chunks for the file have now been sent. The caller may want to "commit" the
      * new object since all chunks have finished.
      */
-    synchronized boolean chunkSuccess() {
-        if(state != State.IN_PROGRESS && state != State.ERROR) {
+    synchronized boolean chunkSuccess(StreamingXor checksum) {
+        combinedChecksum.update(checksum);
+        if(state != State.PENDING && state != State.ERROR) {
             throw new RuntimeException("Invalid state " + state);
         }
         stats.numChunksSucceeded.incrementAndGet();
@@ -67,5 +69,9 @@ public class FileTransferState {
         }
         state = State.COMMITTED;
         stats.numFilesSucceeded.incrementAndGet();
+    }
+    
+    synchronized public String getCombinedChecksum() {
+        return combinedChecksum.getXorHex();
     }
 }

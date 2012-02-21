@@ -214,6 +214,9 @@ public class S3Test {
                 new org.apache.hadoop.conf.Configuration(),
                 true,
                 null,
+                null,
+                0,
+                null,
                 null);
         new HBackup(conf).runWithCheckedExceptions();
         TestUtil.verifyS3Obj(sinkService, sinkBucket, sinkKey, sixMegBuf);
@@ -253,6 +256,9 @@ public class S3Test {
                 new org.apache.hadoop.conf.Configuration(),
                 true,
                 null,
+                null,
+                0,
+                null,
                 null);
         new HBackup(conf).runWithCheckedExceptions();
         TestUtil.verifyS3Obj(sinkService, sinkBucket, key, sixMegBuf);
@@ -290,6 +296,9 @@ public class S3Test {
                 MultipartUtils.MIN_PART_SIZE, // Use multipart upload if the object is at least this many bytes
                 new org.apache.hadoop.conf.Configuration(),
                 true,
+                null,
+                null,
+                0,
                 null,
                 null);
         
@@ -343,14 +352,17 @@ public class S3Test {
                 new org.apache.hadoop.conf.Configuration(),
                 true,
                 null,
-                "s3://" + sinkBucket + "/hashes");
+                "s3://" + sinkBucket + "/hashes",
+                0,
+                sysProps.getString(HBackupConfig.CONF_CHECKSUMS3ACCESSKEY),
+                sysProps.getString(HBackupConfig.CONF_CHECKSUMS3SECRET));
         HBackup hBackup;
         hBackup = new HBackup(conf);
         hBackup.runWithCheckedExceptions();
         Assert.assertEquals(1, hBackup.getStats().numFilesSucceeded.get());
         
-        TestUtil.verifyS3Obj(sinkService, sinkBucket, "hashes/abc.txt",
-                XorStreamTest.expectedXor(contents.getBytes()).getBytes());
+        String expectedHash = XorStreamTest.expectedXor(contents.getBytes()); 
+        TestUtil.verifyS3Obj(sinkService, sinkBucket, "hashes/abc.txt", expectedHash.getBytes());
     }
     
     @Test
@@ -377,7 +389,10 @@ public class S3Test {
                 new org.apache.hadoop.conf.Configuration(),
                 true,
                 null,
-                "s3://" + sinkBucket + "/hashes");
+                "s3://" + sinkBucket + "/hashes",
+                0,
+                sysProps.getString(HBackupConfig.CONF_CHECKSUMS3ACCESSKEY),
+                sysProps.getString(HBackupConfig.CONF_CHECKSUMS3SECRET));
         HBackup hBackup;
         hBackup = new HBackup(conf);
         hBackup.runWithCheckedExceptions();
