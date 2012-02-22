@@ -5,8 +5,8 @@ import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -17,35 +17,35 @@ import org.jets3t.service.impl.rest.httpclient.RestS3Service;
 import org.jets3t.service.model.MultipartPart;
 import org.jets3t.service.model.MultipartUpload;
 import org.jets3t.service.model.S3Object;
-import org.joda.time.DateTime;
-import org.joda.time.DateTimeZone;
+import org.jets3t.service.model.StorageObject;
 
+import com.urbanairship.hbackup.ChecksumService;
 import com.urbanairship.hbackup.Constant;
-import com.urbanairship.hbackup.HBFile;
 import com.urbanairship.hbackup.HBackupConfig;
+import com.urbanairship.hbackup.RetryableChunk;
 import com.urbanairship.hbackup.Sink;
+import com.urbanairship.hbackup.SourceFile;
 import com.urbanairship.hbackup.Stats;
+import com.urbanairship.hbackup.StreamingXor;
+import com.urbanairship.hbackup.Util;
+import com.urbanairship.hbackup.XorInputStream;
+
+// TODO only get remote listing once, instead of once per file
 
 public class Jets3tSink extends Sink {
     private static final Logger log = LogManager.getLogger(HdfsSink.class);
-//    private final URI baseUri;
     private final HBackupConfig conf;
     private final S3Service s3Service;
     private final String bucketName;
     private final String baseName;
-    private final Stats stats;
     
-    public Jets3tSink(URI uri, HBackupConfig conf, Stats stats) throws IOException, URISyntaxException {
-//        this.baseUri = uri;
-        this.stats = stats;
+    public Jets3tSink(URI uri, HBackupConfig conf, Stats stats, ChecksumService checksumService)  throws IOException, URISyntaxException {
         this.conf = conf;
         this.bucketName = uri.getHost();
-        String uriPath = uri.getPath();
-        if(uriPath.startsWith("/")) {
-            this.baseName = uriPath.substring(1);            
-        } else {
-            this.baseName = uriPath;
-        }
+        
+        // The path component of the incoming URI, which we will prefix onto all outgoing files,
+        // must not begin with "/", and must end with "/".
+        this.baseName = Util.canonicalizeBaseName(uri.getPath());
         
         try {
             s3Service = new RestS3Service(conf.s3SinkCredentials);
@@ -53,134 +53,185 @@ public class Jets3tSink extends Sink {
             throw new IOException(e);
         }
     }
+    
+    
 
     @Override
-    public boolean existsAndUpToDate(HBFile file) throws IOException {
+    public boolean existsAndUpToDate(SourceFile file) throws IOException {
         try {
             String sourceRelativePath = file.getRelativePath();
-            S3Object[] listing = s3Service.listObjects(bucketName, baseName + file.getRelativePath(), null);
-            for(S3Object stat: listing) {
-                String sinkRelativePath = stat.getKey().substring(baseName.length()+1);
-                if(sinkRelativePath.equals(sourceRelativePath)) {
-                    // The file exists in the destination.
-                    
-                    // Re-upload if the file in the destination is a different size than the source.
-                    if(file.getLength() != stat.getContentLength()) {
-                        log.debug("File in destination had a different length than the source " +
-                                " for " + sourceRelativePath + ". Will re-upload.");
-                        return false;
-                    }
-
-                    // Re-upload if the file in the destination is based on a previous version
-                    // of the source.
-                    if(!conf.mtimeCheck) {
-                        return true;
-                    } 
-                    long destMtime;
-                    Object mtimeObj = stat.getMetadata(Constant.S3_SOURCE_MTIME);
-                    if(mtimeObj == null) {
-                        log.debug("Remote object had no source mtime metadata and mtime " + 
-                                "for file " + sourceRelativePath + ", and mtime " + 
-                                "checking is enabled. Will re-upload.");
-                        return false;
-                    }
-                    if(mtimeObj instanceof String) {
-                        try {
-                            destMtime = Long.valueOf((String)mtimeObj);
-                        } catch (NumberFormatException e) {
-                            log.warn("Remote source mtime metadata couldn't be parsed " +
-                                    "as long, value was " + mtimeObj + ". Will re-upload.");
-                            return false;
-                        }
-                    } else {
-                        log.warn("Remote object metadata should have been a String but " +
-                                "was actually " + mtimeObj + " for file " + 
-                                sourceRelativePath + ". Will re-upload.");
-                        return false;
-                    }
-                                
-                    DateTime targetMTime = new DateTime(destMtime, DateTimeZone.UTC);
-                    DateTime sourceMTime = new DateTime(file.getMTime(), DateTimeZone.UTC);
-                    if(targetMTime.equals(sourceMTime)) {
-                        return true;
-                    } else {
-                        return false;
-                    }
-                }
+            assert !sourceRelativePath.startsWith("/");
+            
+            StorageObject s3Obj = s3Service.getObjectDetails(bucketName, baseName + file.getRelativePath());
+            if(s3Obj == null) {
+                log.debug("No matching remote file existed, will upload: " + sourceRelativePath);
+                return false; // No matching remote file was found in the file listing
             }
-            return false; // No matching remote file was found in the file listing
+            if(file.getLength() != s3Obj.getContentLength()) {
+                log.debug("File in destination had a different length than the source " +
+                        " for " + sourceRelativePath + ". Will re-upload.");
+                return false;
+            }
+            if(!conf.mtimeCheck) {
+                log.debug("Mtime checking was disabled and filesize matched. Won't reupload " + sourceRelativePath);
+                return true;
+            }
+            
+            Object mtimeObj = s3Obj.getMetadata(Constant.S3_SOURCE_MTIME);
+            if(mtimeObj == null) {
+                log.debug("Remote object had no source mtime metadata and mtime " + 
+                        "for file " + sourceRelativePath + ", and mtime " + 
+                        "checking is enabled. Will re-upload.");
+                return false;
+            }
+            if(mtimeObj instanceof String) {
+                try {
+                    long destMtime = Long.valueOf((String)mtimeObj);
+                    
+                    if(file.getMTime() == destMtime) {
+                        log.debug("Mtime and length match for file, won't re-upload: " + sourceRelativePath);
+                        return true;
+                    } else {
+                        log.debug("Same length but different mtime for file, will re-upload: " + sourceRelativePath);
+                        return false;
+                    }
+                } catch (NumberFormatException e) {
+                    log.warn("Remote source mtime metadata couldn't be parsed " +
+                            "as long, value was " + mtimeObj + ". Will re-upload.");
+                    return false;
+                }
+            } else {
+                log.warn("Remote object metadata should have been a String but " +
+                        "was actually " + mtimeObj + " for file " + 
+                        sourceRelativePath + ". Will re-upload.");
+                return false;
+            }
         } catch (ServiceException e) {
-            throw new IOException(e);
+            if(e.getResponseCode() == 404) {
+                log.debug("Sink object not present (404) for " + file.getRelativePath() + ", will upload");
+                return false;
+            } else {
+                throw new IOException(e);
+            }
         }
     }
 
-    private static enum MultipartTransferState {BEFORE_INIT, IN_PROGRESS, ERROR, DONE};
+//    private static enum MultipartTransferState {BEFORE_INIT, IN_PROGRESS, ERROR, DONE};
     
+    /**
+     * This is slightly complicated. The complication arises from coordinating multiple threads
+     * as they transfer multiple chunks for the same file in parallel. The first thread to start
+     * a chunk must initialize the multipart transfer, which happens in beforeChunk(). The last
+     * thread to finish a chunk must commit the result, which happens in chunkSuccess(). There
+     * is a simple state machine to coordinate the initialization/commit/abort of the multipart
+     * transfer, and the state machine's state is stored in the "MultipartTransferState state" var.
+     */
     private class ChunkWriter {
-        private final HBFile file;
-        private final List<Runnable> chunks;
-
-        MultipartUpload mpUpload;
-        List<MultipartPart> finishedParts = new ArrayList<MultipartPart>();
-        
+        private final SourceFile file;
+        private final List<RetryableChunk> chunks;
+        private final List<MultipartPart> finishedParts = Collections.synchronizedList(new ArrayList<MultipartPart>());
         private final int numChunks;
         private final String destS3Key;
+        private final String relativePath;
         
-        private MultipartTransferState state = MultipartTransferState.BEFORE_INIT;
+        private final Object multiPartInitLock = new Object();
+        private MultipartUpload mpUpload = null;
         
-        public ChunkWriter(HBFile hbFile) {
+        public ChunkWriter(SourceFile hbFile) {
              this.file = hbFile;
-             destS3Key = baseName + file.getRelativePath();
+             relativePath = file.getRelativePath();
+             assert !relativePath.startsWith("/");
+             destS3Key = baseName + relativePath;
              
              final long inputLen = file.getLength();
              if(inputLen >= conf.s3MultipartThreshold) {
                  numChunks = (int)(inputLen / conf.s3PartSize + 1);
-                 chunks = new ArrayList<Runnable>(1);
+                 chunks = new ArrayList<RetryableChunk>(1);
                  
                  for(int i=0; i<numChunks; i++) {
                      final long startAt = i * conf.s3PartSize;
                      final long objLen = Math.min(conf.s3PartSize, inputLen - startAt);
                      final int partNum = i;
                      
-                     chunks.add(new Runnable() {
+                     chunks.add(new RetryableChunk() {
                         @Override
-                        public void run() {
+                        public StreamingXor run() throws IOException {
+                            InputStream partInputStream = null;
                             try {
-                                MultipartUpload mpUpload = beforeChunk();
+                                synchronized (multiPartInitLock) {
+                                    // Initialize the multipart upload if not already done.
+                                    if(mpUpload == null) {
+                                        S3Object multipartObj = new S3Object(destS3Key);
+                                        // Upload the source file's mtime as S3 metadata. The next time we run a backup,
+                                        // this will tell us whether we should re-upload the file.
+                                        multipartObj.addMetadata(Constant.S3_SOURCE_MTIME, Long.toString(file.getMTime()));
+                                        log.debug("Starting multipart upload for " + relativePath);
+                                        mpUpload = s3Service.multipartStartUpload(bucketName, multipartObj);
+                                    }
+                                }
                                 
-                                InputStream partInputStream = file.getPartialInputStream(startAt, objLen);
+                                partInputStream = file.getPartialInputStream(startAt, objLen);
+                                XorInputStream xis = new XorInputStream(partInputStream, startAt);
                                 S3Object s3ObjForPart = new S3Object(destS3Key);
-                                s3ObjForPart.setDataInputStream(partInputStream);
-                                System.err.println("********* Uploading part " + partNum + " with size " + objLen);
+                                s3ObjForPart.setDataInputStream(xis);
                                 MultipartPart thisPart = s3Service.multipartUploadPart(mpUpload, partNum+1, 
                                         s3ObjForPart);
-                                System.err.println("********* Uploaded part " + partNum + " with size " + thisPart.getSize() + 
-                                        " and expected size " + objLen);
                                 assert thisPart.getSize() == objLen;
-                                
-                                chunkSuccess(thisPart);
-                            } catch (Exception e) {
-                                chunkError();
-                                stats.transferExceptions.add(e);
+                                finishedParts.add(thisPart);
+                                return xis.getStreamingXor();
+                            } catch (S3ServiceException e) {
+                                throw new IOException(e);
+                            } finally {
+                                if(partInputStream != null) {
+                                    try {
+                                        partInputStream.close();
+                                    } catch (IOException e) { }
+                                }
+                            }
+                        }
+
+                        @Override
+                        public void commitAllChunks() throws IOException {
+                            try {
+                                log.info("Multipart upload complete for " + relativePath);
+                                s3Service.multipartCompleteUpload(mpUpload, finishedParts);
+                            } catch (S3ServiceException e) {
+                                throw new IOException(e);
                             }
                         }
                      });
                  }
              } else {
                  numChunks = 1;
-                 chunks = new ArrayList<Runnable>(1);
-                 chunks.add(new Runnable() {
+                 chunks = new ArrayList<RetryableChunk>(1);
+                 chunks.add(new RetryableChunk() {
                     @Override
-                    public void run() {
+                    public StreamingXor run() throws IOException {
+                        InputStream sourceStream = null;
                         try {
+                            log.debug("Starting regular non-multipart S3 upload of " + relativePath);
                             S3Object s3Obj = new S3Object(destS3Key);
                             s3Obj.addMetadata(Constant.S3_SOURCE_MTIME, Long.toString(file.getMTime()));
-                            s3Obj.setDataInputStream(file.getFullInputStream());
-                            s3Obj.setContentLength(file.getLength());
+                            sourceStream = file.getFullInputStream();
+                            XorInputStream xis = new XorInputStream(sourceStream, 0);
+                            s3Obj.setDataInputStream(xis);
                             s3Service.putObject(bucketName, s3Obj);
-                        } catch (Exception e) {
-                            stats.transferExceptions.add(e);
+                            log.debug("Finished regular non-multipart S3 upload of " + relativePath);
+                            return xis.getStreamingXor();
+                        } catch (ServiceException e) {
+                            throw new IOException(e);
+                        } finally {
+                            if(sourceStream != null) {
+                                try {
+                                    sourceStream.close();
+                                } catch (IOException e) { }
+                            }
                         }
+                    }
+
+                    @Override
+                    public void commitAllChunks() throws IOException {
+                        log.debug("Commit noop, nothing to do for simple S3 uploads");
                     }
                  });
              }
@@ -189,72 +240,13 @@ public class Jets3tSink extends Sink {
         /**
          * Return the chunks (1 or more) that will collectively transfer this file.
          */
-        public List<Runnable> getChunks() {
+        public List<RetryableChunk> getChunks() {
             return chunks;
-        }
-
-        /**
-         * Initializes the multipart transfer if it hasn't already been initialized.
-         * @returns a MultipartUpload if the transfer should go ahead, or null if some other chunk
-         * failed for this file and the chunk should be skipped.
-         */
-        synchronized private MultipartUpload beforeChunk() throws Exception {
-            assert state != MultipartTransferState.DONE;
-            
-            // Some other chunk had an error. Skip transferring the chunk that would be transferred now.
-            if (state == MultipartTransferState.ERROR) {
-                stats.numChunksSkipped.incrementAndGet();
-                return null;
-            }
-            
-            if(state == MultipartTransferState.BEFORE_INIT) {
-                S3Object multipartObj = new S3Object(destS3Key);
-                
-                // Upload th e source file's mtime as S3 metadata. The next time we run a backup,
-                // this will tell us whether we should re-upload the file.
-                multipartObj.addMetadata(Constant.S3_SOURCE_MTIME, Long.toString(file.getMTime()));
-                
-                mpUpload = s3Service.multipartStartUpload(bucketName, multipartObj);
-                state = MultipartTransferState.IN_PROGRESS;
-            }
-            
-            return mpUpload;
-        }
-        
-        /**
-         * Finishes and commits the multipart transfer when the last chunk finishes.
-         */
-        synchronized private void chunkSuccess(MultipartPart part) throws Exception {
-            assert state == MultipartTransferState.IN_PROGRESS;
-            
-            finishedParts.add(part);
-            stats.numChunksSucceeded.incrementAndGet();
-            if(finishedParts.size() == numChunks) {
-                s3Service.multipartCompleteUpload(mpUpload, finishedParts);
-                
-                state = MultipartTransferState.DONE;
-                stats.numFilesSucceeded.incrementAndGet();
-            }
-        }
-        
-        /**
-         * Called when some chunk couldn't be transferred.
-         */
-        synchronized private void chunkError() {
-            assert state == MultipartTransferState.IN_PROGRESS;
-            
-            state = MultipartTransferState.ERROR;
-            try {
-                s3Service.multipartAbortUpload(mpUpload);
-            } catch (Exception e) {
-                log.error("Another error when trying to abort multipart upload", e);
-            }
-            stats.numChunksFailed.incrementAndGet();
         }
     }
     
     @Override
-    public List<Runnable> getChunks(HBFile file) {
+    public List<RetryableChunk> getChunks(SourceFile file) {
         return new ChunkWriter(file).getChunks();
     }
 }

@@ -1,7 +1,6 @@
 package com.urbanairship.hbackup;
 
 import java.io.File;
-import java.io.InputStream;
 import java.io.OutputStream;
 
 import junit.framework.Assert;
@@ -11,7 +10,9 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
+import org.jets3t.service.utils.MultipartUtils;
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -45,7 +46,6 @@ public class HdfsTest {
 
         srcFs = srcCluster.getFileSystem();
         sinkFs = sinkCluster.getFileSystem();
-
     }
     
     /**
@@ -60,6 +60,12 @@ public class HdfsTest {
         }
     }
     
+    @AfterClass
+    public static void shutdownMiniDfsClusters() {
+        TestUtil.shutdownMiniDfs(srcCluster);
+        TestUtil.shutdownMiniDfs(sinkCluster);
+    }
+    
     @Test
     public void testHdfsToHdfs() throws Exception {
         final String FILE_CONTENTS = "Unicorns are better than ponies";
@@ -72,7 +78,7 @@ public class HdfsTest {
         hBackup.runWithCheckedExceptions();
         
         Assert.assertTrue(sinkFs.exists(new Path("/copydest/myfile.txt")));
-        verifyContents(sinkFs, "/copydest/myfile.txt", FILE_CONTENTS);
+        TestUtil.verifyHdfsContents(sinkFs, "/copydest/myfile.txt", FILE_CONTENTS);
     }
     
     /**
@@ -87,11 +93,13 @@ public class HdfsTest {
         
         // Set up file in source to be backed up
         writeFile(srcFs, sourceName, initialContents);
-        verifyContents(srcFs, sourceName, initialContents);
+        TestUtil.verifyHdfsContents(srcFs, sourceName, initialContents);
         
         // Backup from source to dest and verify that it worked
-        TestUtil.runBackup(getSourceUrl("/from"), getSinkUrl("/to"));
-        verifyContents(sinkFs, sinkName, initialContents);
+        String source = getSourceUrl("/from");
+        String dest = getSinkUrl("/to");
+        TestUtil.runBackup(source, dest);
+        TestUtil.verifyHdfsContents(sinkFs, sinkName, initialContents);
         
         // Verify that the sink file has the same mtime as the source file
         long sourceMtime = srcFs.getFileStatus(new Path(sourceName)).getModificationTime();
@@ -101,19 +109,56 @@ public class HdfsTest {
         // Modify the source file and run another backup. The destination should pick up the change.
         writeFile(srcFs, sourceName, modifiedContents);
         TestUtil.runBackup(getSourceUrl("/from"), getSinkUrl("/to"));
-        verifyContents(sinkFs, sinkName, modifiedContents);
+        TestUtil.verifyHdfsContents(sinkFs, sinkName, modifiedContents);
+    }
+    
+    /**
+     * Test regex file matching by backup up a folder containing two files, one that matches the regex
+     * and one that doesn't.
+     */
+    @Test
+    public void regexTest() throws Exception {
+        writeFile(srcFs, "/from/i_do_match.txt", "Taco");
+        writeFile(srcFs, "/from/i_dont_match.txt", "Burrito");
         
+        HBackupConfig conf = new HBackupConfig(
+                getSourceUrl("/from"),
+                getSinkUrl("/to"),
+                2,
+                true,
+                null,
+                null,
+                null, 
+                null,
+                MultipartUtils.MIN_PART_SIZE, // Smallest part size (5MB) will cause multipart upload of 6MB file 
+                MultipartUtils.MIN_PART_SIZE, // Use multipart upload if the object is at least this many bytes
+                new org.apache.hadoop.conf.Configuration(),
+                true,
+                ".*do_match.*",
+                null,
+                0,
+                null,
+                null);
+        HBackup hbackup = new HBackup(conf);
+        hbackup.runWithCheckedExceptions();
+        Assert.assertEquals(1, hbackup.getStats().numFilesSucceeded.get());
+        TestUtil.verifyHdfsContents(sinkFs, "/to/i_do_match.txt", "Taco");
+    }
+    
+    /**
+     * Make sure that empty files are backed up.
+     */
+    @Test
+    public void emptyFileTest() throws Exception {
+        writeFile(srcFs, "/from/empty.txt", "");
+        TestUtil.runBackup(getSourceUrl("/from"), getSinkUrl("/to"));
+        Assert.assertTrue(sinkFs.exists(new Path("/to/empty.txt")));
     }
     
     private static void writeFile(FileSystem fs, String path, String contents) throws Exception {
         OutputStream os = fs.create(new Path(path), true);
         os.write(contents.getBytes());
         os.close();
-    }
-    
-    private static void verifyContents(FileSystem fs, String path, String contents) throws Exception {
-        InputStream is = fs.open(new Path(path));
-        TestUtil.assertStreamEquals(contents.getBytes(), is);
     }
     
     private static String getSourceUrl(String dirName) {
