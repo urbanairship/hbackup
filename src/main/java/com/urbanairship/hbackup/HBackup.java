@@ -36,7 +36,7 @@ public class HBackup implements Runnable {
     public HBackup(HBackupConfig conf) throws URISyntaxException, IOException {
         this.conf = conf;
         this.stats = new Stats();
-        this.source = Source.forUri(new URI(conf.from), conf, stats);
+        this.source = Source.forUri(new URI(conf.from), conf);
         this.sink = Sink.forUri(new URI(conf.to), conf, stats);
         if(conf.checksumUri != null) {
             this.checksumService = ChecksumService.forUri(new URI(conf.checksumUri), conf);
@@ -108,11 +108,13 @@ public class HBackup implements Runnable {
         executor.shutdown();
         executor.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
         
-        log.info("Files copied:  " + stats.numFilesSucceeded.get());
-        log.info("Files skipped: " + stats.numUpToDateFilesSkipped.get());
-        log.info("Files failed:  " + stats.numFilesFailed.get());
-        log.info("Chunks copied: " + stats.numChunksSucceeded.get());
-        log.info("Chunks failed: " + stats.numChunksFailed.get());
+        log.info("Files copied:      " + stats.numFilesSucceeded.get());
+        log.info("Files skipped:     " + stats.numUpToDateFilesSkipped.get());
+        log.info("Files failed:      " + stats.numFilesFailed.get());
+        log.info("Chunks copied:     " + stats.numChunksSucceeded.get());
+        log.info("Chunks failed:     " + stats.numChunksFailed.get());
+        log.info("Checksums saved:   " + stats.numChecksumsSucceeded.get());
+        log.info("Checksums unsaved: " + stats.numChecksumsFailed.get());
         
         // Re-throw the first exception seen by a worker thread, if any exceptions occurred
         if(!stats.fileFailureExceptions.isEmpty()) {

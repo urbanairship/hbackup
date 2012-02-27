@@ -2,7 +2,9 @@ package com.urbanairship.hbackup;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Random;
 
+import org.apache.commons.codec.binary.Hex;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
@@ -81,5 +83,24 @@ public abstract class TestUtil {
                 s3Obj.closeDataInputStream(); 
             }
         }
+    }
+    
+    public static byte[] getRandomBuf(int size) {
+        Random rng = new Random(0);
+        byte[] buf = new byte[size];
+        rng.nextBytes(buf);
+        return buf;
+    }
+    
+    public static String expectedXor(byte[] bytes) {
+        byte[] xor = new byte[8];
+        for(int i=0; i<Math.min(bytes.length, 8); i++) {
+            xor[i%8] = bytes[i];
+        }
+        for(int i=8; i<bytes.length; i++) {
+            xor[i%8] ^= bytes[i];
+        }
+        
+        return new String(Hex.encodeHex(xor));
     }
 }

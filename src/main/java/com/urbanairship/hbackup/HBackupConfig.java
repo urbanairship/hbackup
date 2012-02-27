@@ -31,8 +31,8 @@ public class HBackupConfig {
     public static final String CONF_INCLUDEPATHSREGEX = "hbackup.includePathsRegex";
     public static final String CONF_CHECKSUMURI = "hbackup.checksumUri";
     public static final String CONF_CHUNKRETRIES = "hbackup.chunkRetries";
-    public static final String CONF_CHECKSUMS3ACCESSKEY = "hbackup.checksumS3AccessKey";
-    public static final String CONF_CHECKSUMS3SECRET = "hbackup.checksumS3Secret";
+    public static final String CONF_CHECKSUMS3ACCESSKEY = "hbackup.checksum.s3AccessKey";
+    public static final String CONF_CHECKSUMS3SECRET = "hbackup.checksum.s3Secret";
     
     public static final int DEFAULT_CONCURRENT_FILES = 5;
     public static final long DEFAULT_S3_PART_SIZE = MultipartUtils.MIN_PART_SIZE; // small chunks => high concurrency
@@ -63,9 +63,9 @@ public class HBackupConfig {
             org.apache.hadoop.conf.Configuration hadoopConf, boolean mtimeCheck,
             String includePathsRegex, String checksumUri, int chunkRetries,
             String checksumS3AccessKey, String checksumS3Secret) {
-        if(from == null || to == null) {
-            throw new IllegalArgumentException("from and to cannot be null");
-        }
+//        if(from == null || to == null) {
+//            throw new IllegalArgumentException("from and to cannot be null");
+//        }
         
         if(s3PartSize < MultipartUtils.MIN_PART_SIZE || s3PartSize > MultipartUtils.MAX_OBJECT_SIZE) {
             throw new IllegalArgumentException("s3PartSize must be within the range " + 

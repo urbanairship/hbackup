@@ -62,8 +62,12 @@ public class HdfsTest {
     
     @AfterClass
     public static void shutdownMiniDfsClusters() {
-        TestUtil.shutdownMiniDfs(srcCluster);
-        TestUtil.shutdownMiniDfs(sinkCluster);
+        if(srcCluster != null) {
+            TestUtil.shutdownMiniDfs(srcCluster);
+        }
+        if(sinkCluster != null) {
+            TestUtil.shutdownMiniDfs(sinkCluster);
+        }
     }
     
     @Test

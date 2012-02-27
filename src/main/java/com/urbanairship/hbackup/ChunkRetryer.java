@@ -49,20 +49,15 @@ public class ChunkRetryer implements Runnable {
                     retryableRunnable.commitAllChunks();
                     file.fileCommitted();
                     if(checksumService != null) {
-                        try {
-                            checksumService.storeChecksum(file.getSourceFile().getRelativePath(),
-                                    file.getCombinedChecksum());
-                        } catch (IOException e) {
-                            log.error("Failed writing checksum for file " + relativePath, e);
-                        }
+                        saveChecksum();
                     }
                 }
                 break;
             } catch (IOException e) {
                 if(tryNum >= numRetries) {
                     log.error("Exhausted retries for chunk belonging to file " + 
-                            file.getSourceFile().getRelativePath(), e);
-                    file.chunkError();
+                            relativePath, e);
+                    file.chunkError(e);
                     return;
                 } else {
                     log.warn("Chunk transfer error, will retry", e);
@@ -70,5 +65,24 @@ public class ChunkRetryer implements Runnable {
                 tryNum++;
             }
         }
+    }
+    
+    private void saveChecksum() {
+        // Use the same number for retries for saving the checksum as for saving the the files,
+        // because whatever.
+        int checksumRetriesRemaining = numRetries;
+        String relativePath = file.getSourceFile().getRelativePath();
+        do {
+            try {
+                checksumService.storeChecksum(file.getSourceFile().getRelativePath(),
+                        file.getCombinedChecksum());
+                file.checksumSuccess();
+                return;
+            } catch (IOException e) {
+                log.error("Failed writing checksum for file " + relativePath, e);
+            }
+        } while(checksumRetriesRemaining-- > 0);
+        log.error("All checksum write attempts failed for file " + relativePath);
+        file.checksumFailed();
     }
 }
