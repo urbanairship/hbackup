@@ -1,7 +1,6 @@
 package com.urbanairship.hbackup;
 
 import java.io.File;
-import java.io.OutputStream;
 
 import junit.framework.Assert;
 
@@ -75,7 +74,7 @@ public class HdfsTest {
         final String FILE_CONTENTS = "Unicorns are better than ponies";
         
         srcFs.mkdirs(new Path("/copysrc"));
-        writeFile(srcFs, "/copysrc/myfile.txt", FILE_CONTENTS);
+        TestUtil.writeHdfsFile(srcFs, "/copysrc/myfile.txt", FILE_CONTENTS);
         
         HBackup hBackup = new HBackup(HBackupConfig.forTests(getSourceUrl("/copysrc"), 
                 getSinkUrl("/copydest"), null, srcFs.getConf(),
@@ -97,7 +96,7 @@ public class HdfsTest {
         final String sinkName = "/to/file1.txt";
         
         // Set up file in source to be backed up
-        writeFile(srcFs, sourceName, initialContents);
+        TestUtil.writeHdfsFile(srcFs, sourceName, initialContents);
         TestUtil.verifyHdfsContents(srcFs, sourceName, initialContents);
         
         // Backup from source to dest and verify that it worked
@@ -113,7 +112,7 @@ public class HdfsTest {
         Assert.assertEquals(sourceMtime, sinkMtime);
         
         // Modify the source file and run another backup. The destination should pick up the change.
-        writeFile(srcFs, sourceName, modifiedContents);
+        TestUtil.writeHdfsFile(srcFs, sourceName, modifiedContents);
         new HBackup(conf).runWithCheckedExceptions();
         TestUtil.verifyHdfsContents(sinkFs, sinkName, modifiedContents);
     }
@@ -124,11 +123,9 @@ public class HdfsTest {
      */
     @Test
     public void regexTest() throws Exception {
-        writeFile(srcFs, "/from/i_do_match.txt", "Taco");
-        writeFile(srcFs, "/from/i_dont_match.txt", "Burrito");
-        
-//        HBackupConfig conf = HBackupConfig.forTests(getSourceUrl("/from"), getSinkUrl("/to"),
-//                null, srcFs.getConf(), sinkFs.getConf(), null, null);
+        TestUtil.writeHdfsFile(srcFs, "/from/i_do_match.txt", "Taco");
+        TestUtil.writeHdfsFile(srcFs, "/from/i_dont_match.txt", "Burrito");
+
         HBackupConfig conf = new HBackupConfig(
                 getSourceUrl("/from"), 
                 getSinkUrl("/to"),
@@ -149,7 +146,8 @@ public class HdfsTest {
                 null,
                 null,
                 null,
-                null);
+                null,
+                0);
         HBackup hbackup = new HBackup(conf);
         hbackup.runWithCheckedExceptions();
         Assert.assertEquals(1, hbackup.getStats().numFilesSucceeded.get());
@@ -161,17 +159,11 @@ public class HdfsTest {
      */
     @Test
     public void emptyFileTest() throws Exception {
-        writeFile(srcFs, "/from/empty.txt", "");
+        TestUtil.writeHdfsFile(srcFs, "/from/empty.txt", "");
         HBackupConfig config = HBackupConfig.forTests(getSourceUrl("/from"), 
                 getSinkUrl("/to"), null, srcFs.getConf(), sinkFs.getConf(), null, null);
         new HBackup(config).runWithCheckedExceptions();
         Assert.assertTrue(sinkFs.exists(new Path("/to/empty.txt")));
-    }
-    
-    private static void writeFile(FileSystem fs, String path, String contents) throws Exception {
-        OutputStream os = fs.create(new Path(path), true);
-        os.write(contents.getBytes());
-        os.close();
     }
     
     private static String getSourceUrl(String dirName) {

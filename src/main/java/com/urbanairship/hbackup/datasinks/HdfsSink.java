@@ -79,6 +79,19 @@ public class HdfsSink extends Sink {
             return false;
         }
     }
+    
+    /**
+     * @return the file mtime as UTC epoch millis if the file exists, or null if it doesn't exist.
+     */
+    @Override
+    public Long getMTime(String relativePath) throws IOException {
+        try {
+            FileStatus stat = dfs.getFileStatus(new Path(baseName + relativePath));
+            return stat.getModificationTime();
+        } catch (FileNotFoundException e) {
+            return null;
+        }
+    }
 
     /**
      * HDFS files can only have a single writer at a time. Therefore we do a transfer to HDFS

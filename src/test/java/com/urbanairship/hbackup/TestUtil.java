@@ -2,6 +2,7 @@ package com.urbanairship.hbackup;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.Random;
 
 import org.apache.commons.codec.binary.Hex;
@@ -103,4 +104,12 @@ public abstract class TestUtil {
         
         return new String(Hex.encodeHex(xor));
     }
+    
+    public static void writeHdfsFile(FileSystem fs, String path, String contents) throws Exception {
+        OutputStream os = fs.create(new Path(path), true);
+        os.write(contents.getBytes());
+        os.close();
+    }
+    
+
 }

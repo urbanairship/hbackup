@@ -3,6 +3,7 @@ package com.urbanairship.hbackup;
 import java.io.File;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.configuration.CompositeConfiguration;
 import org.apache.commons.configuration.ConfigurationException;
@@ -35,7 +36,8 @@ public class HBackupConfig {
     public static final String CONF_CHECKSUMS3ACCESSKEY = "hbackup.checksum.s3AccessKey";
     public static final String CONF_CHECKSUMS3SECRET = "hbackup.checksum.s3Secret";
     public static final String CONF_FALLBACKS3ACCESSKEY = "hbackup.s3AccessKey";
-    public static final String CONF_FALLBACKS3SECRET = "hbackup.s3AccessKey";
+    public static final String CONF_FALLBACKS3SECRET = "hbackup.s3Secret";
+    public static final String CONF_STALEMILLIS = "hbackup.staleMillis";
     
     public static final int DEFAULT_CONCURRENT_FILES = 5;
     public static final long DEFAULT_S3_PART_SIZE = 100 * 1024 * 1024;
@@ -43,6 +45,7 @@ public class HBackupConfig {
     public static final boolean DEFAULT_MTIMECHECK = true;
     public static final boolean DEFAULT_RECURSIVE = true;
     public static final int DEFAULT_CHUNKRETRIES = 4;
+    public static final long DEFAULT_STALEMILLIS = TimeUnit.DAYS.toMillis(1);
     
     // Config values
     public final String from;
@@ -59,7 +62,8 @@ public class HBackupConfig {
     public final boolean mtimeCheck;
     public final String includePathsRegex;
     public final String checksumUri;
-    public final int chunkRetries;
+    public final int numRetries;
+    public final long stalenessMillis;
     
     /**
      * See {@link #optHelps} for an explanation of the parameters.
@@ -69,7 +73,7 @@ public class HBackupConfig {
             long s3PartSize, long s3MultipartThreshold, Configuration hdfsSourceConf, 
             Configuration hdfsSinkConf, boolean mtimeCheck, String includePathsRegex, 
             String checksumUri, int chunkRetries, String checksumS3AccessKey, String checksumS3Secret,
-            String fallbackS3AccessKey, String fallbackS3Secret) {
+            String fallbackS3AccessKey, String fallbackS3Secret, long staleMillis) {
         
         if(s3PartSize < MultipartUtils.MIN_PART_SIZE || s3PartSize > MultipartUtils.MAX_OBJECT_SIZE) {
             throw new IllegalArgumentException("s3PartSize must be within the range " + 
@@ -91,8 +95,12 @@ public class HBackupConfig {
         this.mtimeCheck = mtimeCheck;
         this.includePathsRegex = includePathsRegex;
         this.checksumUri = checksumUri;
-        this.chunkRetries = chunkRetries;
+        this.numRetries = chunkRetries;
+        this.stalenessMillis = staleMillis;
         
+        // The fallback credentials are used whever the config doesn't specify specific credentials
+        // for source/sink/checksum. This makes the common case easy, where there is only one set
+        // of credentials used for all three things.
         AWSCredentials fallbackAwsCreds = null;
         if(fallbackS3AccessKey != null && fallbackS3Secret != null) {
             fallbackAwsCreds = new AWSCredentials(fallbackS3AccessKey, fallbackS3Secret);
@@ -143,7 +151,8 @@ public class HBackupConfig {
                 null,
                 null,
                 null,
-                null);
+                null,
+                DEFAULT_STALEMILLIS);
     }
     
     /**
@@ -170,7 +179,8 @@ public class HBackupConfig {
                 s3AccessKey,
                 s3Secret,
                 null,
-                null);
+                null,
+                0);
     }
     
     /**
@@ -198,7 +208,8 @@ public class HBackupConfig {
                 s3AccessKey,
                 s3Secret,
                 null,
-                null);
+                null,
+                0);
     }
 
     /**
@@ -278,7 +289,8 @@ public class HBackupConfig {
                 conf.getString(CONF_CHECKSUMS3ACCESSKEY, null),
                 conf.getString(CONF_CHECKSUMS3SECRET, null),
                 conf.getString(CONF_FALLBACKS3ACCESSKEY, null),
-                conf.getString(CONF_FALLBACKS3SECRET, null));
+                conf.getString(CONF_FALLBACKS3SECRET, null),
+                conf.getLong(CONF_STALEMILLIS, null));
     }
     
     final public static OptHelp[] optHelps = new OptHelp[] {
@@ -301,7 +313,8 @@ public class HBackupConfig {
             new OptHelp(CONF_CHECKSUMS3ACCESSKEY, "If the checksums are stored in a protected S3 bucket, specify the access key"),
             new OptHelp(CONF_CHECKSUMS3SECRET, "If the checksums are stored in a protected S3 bucket, specify the secret"),
             new OptHelp(CONF_FALLBACKS3ACCESSKEY, "Use this for all S3 accesses, if all your S3 usage is done under the same account"),
-            new OptHelp(CONF_FALLBACKS3SECRET, "Use this for all S3 accesses, if all your S3 usage is done under the same account")            
+            new OptHelp(CONF_FALLBACKS3SECRET, "Use this for all S3 accesses, if all your S3 usage is done under the same account"),            
+            new OptHelp(CONF_STALEMILLIS, "When checking backed-up files for staleness, a file this much older than the source is \"stale\"")
     };
     
     public static class OptHelp {

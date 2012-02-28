@@ -57,8 +57,8 @@ public class HBackup implements Runnable {
     public void runWithCheckedExceptions() throws IOException, InterruptedException {
         BlockingQueue<Runnable> workQueue = new LinkedBlockingQueue<Runnable>();
         
-        ThreadPoolExecutor executor = new ThreadPoolExecutor(conf.concurrentFiles, conf.concurrentFiles, 10, 
-                TimeUnit.SECONDS, workQueue);
+        ThreadPoolExecutor executor = new ThreadPoolExecutor(conf.concurrentFiles, conf.concurrentFiles, 
+                Long.MAX_VALUE, TimeUnit.SECONDS, workQueue);
         
         Pattern p = null;
         if(conf.includePathsRegex != null) {
@@ -97,11 +97,12 @@ public class HBackup implements Runnable {
                 for(RetryableChunk chunk: chunks) {
                     // Enqueue each chunk for transfer
                     executor.execute(new ChunkRetryer(fileState, chunk, checksumService,
-                            conf.chunkRetries, stats));
+                            conf.numRetries, stats));
                 }
 
             } catch (IOException e) {
                 log.error("Skipping file " + file.getRelativePath() + " due to exception", e);
+                stats.numFilesFailed.incrementAndGet();
             }
         }
        

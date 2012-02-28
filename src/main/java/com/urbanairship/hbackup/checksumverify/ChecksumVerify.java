@@ -61,7 +61,7 @@ public class ChecksumVerify implements Runnable {
             long fileLen = file.getLength();
             
             ChecksumStateMachine fileChecksumStateMachine = new ChecksumStateMachine(file, numChunks, 
-                    config.chunkRetries, checksumService, stats);
+                    config.numRetries, checksumService, stats);
 
             log.debug("Queueing file " + file.getRelativePath() + " for checksumming in " +
                     numChunks + " chunks");
@@ -70,7 +70,7 @@ public class ChecksumVerify implements Runnable {
                 long chunkStartOffset = i * config.s3PartSize;
                 long chunkLen = Math.min(fileLen - chunkStartOffset, config.s3PartSize); 
                 ChunkChecksummer chunkChecksummer = new ChunkChecksummer(file, chunkStartOffset, chunkLen,
-                        config.chunkRetries, fileChecksumStateMachine);
+                        config.numRetries, fileChecksumStateMachine);
                 executor.execute(chunkChecksummer);
             }
         }

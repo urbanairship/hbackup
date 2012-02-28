@@ -7,8 +7,9 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import checksumverify.ChecksumStats;
-import checksumverify.ChecksumVerify;
+import com.urbanairship.hbackup.checksumverify.ChecksumStats;
+import com.urbanairship.hbackup.checksumverify.ChecksumVerify;
+
 
 public class ChecksumVerifierTest extends S3SetupAndTeardownTest{
 

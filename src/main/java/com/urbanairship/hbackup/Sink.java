@@ -43,4 +43,9 @@ public abstract class Sink {
     public abstract boolean existsAndUpToDate(SourceFile file) throws IOException;
     
     public abstract List<RetryableChunk> getChunks(SourceFile file);
+
+    /**
+     * @return the file mtime as UTC epoch millis if the file exists, or null if it doesn't exist.
+     */
+    public abstract Long getMTime(String relativePath) throws IOException;
 }
