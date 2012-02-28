@@ -38,7 +38,7 @@ public class HBackupConfig {
     public static final String CONF_FALLBACKS3SECRET = "hbackup.s3AccessKey";
     
     public static final int DEFAULT_CONCURRENT_FILES = 5;
-    public static final long DEFAULT_S3_PART_SIZE = MultipartUtils.MIN_PART_SIZE; // small chunks => high concurrency
+    public static final long DEFAULT_S3_PART_SIZE = 100 * 1024 * 1024;
     public static final int DEFAULT_S3_MULTIPART_THRESHOLD = 100 * 1024 * 1024;
     public static final boolean DEFAULT_MTIMECHECK = true;
     public static final boolean DEFAULT_RECURSIVE = true;
