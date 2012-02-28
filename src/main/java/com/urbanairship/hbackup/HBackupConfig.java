@@ -34,6 +34,8 @@ public class HBackupConfig {
     public static final String CONF_CHUNKRETRIES = "hbackup.chunkRetries";
     public static final String CONF_CHECKSUMS3ACCESSKEY = "hbackup.checksum.s3AccessKey";
     public static final String CONF_CHECKSUMS3SECRET = "hbackup.checksum.s3Secret";
+    public static final String CONF_FALLBACKS3ACCESSKEY = "hbackup.s3AccessKey";
+    public static final String CONF_FALLBACKS3SECRET = "hbackup.s3AccessKey";
     
     public static final int DEFAULT_CONCURRENT_FILES = 5;
     public static final long DEFAULT_S3_PART_SIZE = MultipartUtils.MIN_PART_SIZE; // small chunks => high concurrency
@@ -59,14 +61,15 @@ public class HBackupConfig {
     public final String checksumUri;
     public final int chunkRetries;
     
+    /**
+     * See {@link #optHelps} for an explanation of the parameters.
+     */
     public HBackupConfig(String from, String to, int concurrentFiles, boolean recursive, 
             String sourceS3AccessKey, String sourceS3Secret, String sinkS3AccessKey, String sinkS3Secret,
             long s3PartSize, long s3MultipartThreshold, Configuration hdfsSourceConf, 
             Configuration hdfsSinkConf, boolean mtimeCheck, String includePathsRegex, 
-            String checksumUri, int chunkRetries, String checksumS3AccessKey, String checksumS3Secret) {
-//        if(from == null || to == null) {
-//            throw new IllegalArgumentException("from and to cannot be null");
-//        }
+            String checksumUri, int chunkRetries, String checksumS3AccessKey, String checksumS3Secret,
+            String fallbackS3AccessKey, String fallbackS3Secret) {
         
         if(s3PartSize < MultipartUtils.MIN_PART_SIZE || s3PartSize > MultipartUtils.MAX_OBJECT_SIZE) {
             throw new IllegalArgumentException("s3PartSize must be within the range " + 
@@ -90,22 +93,27 @@ public class HBackupConfig {
         this.checksumUri = checksumUri;
         this.chunkRetries = chunkRetries;
         
+        AWSCredentials fallbackAwsCreds = null;
+        if(fallbackS3AccessKey != null && fallbackS3Secret != null) {
+            fallbackAwsCreds = new AWSCredentials(fallbackS3AccessKey, fallbackS3Secret);
+        }
+        
         if(sourceS3AccessKey != null && sourceS3Secret != null) {
             this.s3SourceCredentials = new AWSCredentials(sourceS3AccessKey, sourceS3Secret);
         } else {
-            this.s3SourceCredentials = null;
+            this.s3SourceCredentials = fallbackAwsCreds;
         }
         
         if(sinkS3AccessKey != null && sinkS3Secret != null) {
             this.s3SinkCredentials = new AWSCredentials(sinkS3AccessKey, sinkS3Secret);
         } else {
-            this.s3SinkCredentials = null;
+            this.s3SinkCredentials = fallbackAwsCreds;
         }
 
         if(checksumS3AccessKey != null && checksumS3Secret!= null) {
             this.s3ChecksumCredentials = new AWSCredentials(checksumS3AccessKey, checksumS3Secret);
         } else {
-            this.s3ChecksumCredentials = null;
+            this.s3ChecksumCredentials = fallbackAwsCreds;
         }
     }
 
@@ -133,6 +141,8 @@ public class HBackupConfig {
                 null,
                 0, // Any retries would probably make test failures more confusing
                 null,
+                null,
+                null,
                 null);
     }
     
@@ -158,7 +168,9 @@ public class HBackupConfig {
                 hashUri,
                 1,
                 s3AccessKey,
-                s3Secret);
+                s3Secret,
+                null,
+                null);
     }
     
     /**
@@ -184,7 +196,9 @@ public class HBackupConfig {
                 hashUri,
                 1,
                 s3AccessKey,
-                s3Secret);
+                s3Secret,
+                null,
+                null);
     }
 
     /**
@@ -262,7 +276,9 @@ public class HBackupConfig {
                 conf.getString(CONF_CHECKSUMURI, null),
                 conf.getInt(CONF_CHUNKRETRIES, DEFAULT_CHUNKRETRIES),
                 conf.getString(CONF_CHECKSUMS3ACCESSKEY, null),
-                conf.getString(CONF_CHECKSUMS3SECRET, null));
+                conf.getString(CONF_CHECKSUMS3SECRET, null),
+                conf.getString(CONF_FALLBACKS3ACCESSKEY, null),
+                conf.getString(CONF_FALLBACKS3SECRET, null));
     }
     
     final public static OptHelp[] optHelps = new OptHelp[] {
@@ -284,6 +300,8 @@ public class HBackupConfig {
             new OptHelp(CONF_CHECKSUMURI, "Where file checksums should be stored"),
             new OptHelp(CONF_CHECKSUMS3ACCESSKEY, "If the checksums are stored in a protected S3 bucket, specify the access key"),
             new OptHelp(CONF_CHECKSUMS3SECRET, "If the checksums are stored in a protected S3 bucket, specify the secret"),
+            new OptHelp(CONF_FALLBACKS3ACCESSKEY, "Use this for all S3 accesses, if all your S3 usage is done under the same account"),
+            new OptHelp(CONF_FALLBACKS3SECRET, "Use this for all S3 accesses, if all your S3 usage is done under the same account")            
     };
     
     public static class OptHelp {

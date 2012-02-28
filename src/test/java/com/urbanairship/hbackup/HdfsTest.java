@@ -147,6 +147,8 @@ public class HdfsTest {
                 null,
                 0,
                 null,
+                null,
+                null,
                 null);
         HBackup hbackup = new HBackup(conf);
         hbackup.runWithCheckedExceptions();
