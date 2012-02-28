@@ -29,6 +29,7 @@ public class S3SetupAndTeardownTest {
     protected static String sourceBucket;
     protected static String sinkBucket;
     protected static MiniDFSCluster dfsCluster = null;
+    protected static Configuration dfsClusterConfig;
     
     protected static void beforeClass() throws Exception {
         sourceBucket = System.getProperty("hbackup.test.sourceBucket");  
@@ -43,15 +44,16 @@ public class S3SetupAndTeardownTest {
         Assume.assumeNotNull(System.getProperty(HBackupConfig.CONF_SOURCES3SECRET));
         Assume.assumeNotNull(sourceBucket, sinkBucket);
         
-        HBackupConfig throwawayConf = HBackupConfig.forTests("fakesource", "fakeddest");
+        HBackupConfig throwawayConf = HBackupConfig.forTests("fakesource", "fakedest", null);
         sourceService = new RestS3Service(throwawayConf.s3SourceCredentials);
         sinkService = new RestS3Service(throwawayConf.s3SinkCredentials);
         
         dfsCluster = new MiniDFSCluster(new Configuration(), 1, true, null);
+        dfsClusterConfig = dfsCluster.getFileSystem().getConf();
     }
     
     /** If the user set a system property to allow clearing of the source and sink
-      * buckets during testing, delete them.
+      * buckets during testing, delete their contents.
       */
     protected void beforeEach() throws Exception {
         

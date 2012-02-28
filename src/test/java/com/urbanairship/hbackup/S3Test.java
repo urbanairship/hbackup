@@ -7,7 +7,6 @@ import org.apache.commons.configuration.SystemConfiguration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.jets3t.service.model.S3Object;
-import org.jets3t.service.utils.MultipartUtils;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Assert;
@@ -140,23 +139,9 @@ public class S3Test extends S3SetupAndTeardownTest {
         String sinkUri = "s3://"+sinkBucket+"/"+sinkDir; 
         
         SystemConfiguration sysProps = new SystemConfiguration();
-        HBackupConfig conf = new HBackupConfig(sourceUri,
-                sinkUri,
-                2, 
-                true, 
-                sysProps.getString(HBackupConfig.CONF_SOURCES3ACCESSKEY), 
-                sysProps.getString(HBackupConfig.CONF_SOURCES3SECRET), 
-                sysProps.getString(HBackupConfig.CONF_SINKS3ACCESSKEY), 
-                sysProps.getString(HBackupConfig.CONF_SINKS3SECRET),
-                MultipartUtils.MIN_PART_SIZE, // Smallest part size (5MB) will cause multipart upload of 6MB file 
-                MultipartUtils.MIN_PART_SIZE, // Use multipart upload if the object is at least this many bytes
-                new org.apache.hadoop.conf.Configuration(),
-                true,
-                null,
-                null,
-                0,
-                null,
-                null);
+        HBackupConfig conf = HBackupConfig.forTests(sourceUri, sinkUri, null, dfsClusterConfig, 
+                sysProps.getString(HBackupConfig.CONF_SINKS3ACCESSKEY),
+                sysProps.getString(HBackupConfig.CONF_SINKS3SECRET));
         new HBackup(conf).runWithCheckedExceptions();
         TestUtil.verifyS3Obj(sinkService, sinkBucket, sinkKey, sixMegBuf);
         
@@ -181,24 +166,10 @@ public class S3Test extends S3SetupAndTeardownTest {
         deleteLater(sinkService, sinkBucket, key);
         
         SystemConfiguration sysProps = new SystemConfiguration();
-        HBackupConfig conf = new HBackupConfig(
-                "hdfs://localhost:" + dfsCluster.getNameNodePort() + "/",
-                "s3://" + sinkBucket + "/" + prefix,
-                2, 
-                true, 
-                null, 
-                null, 
+        HBackupConfig conf = HBackupConfig.forTests("hdfs://localhost:" + dfsCluster.getNameNodePort() + "/",
+                "s3://" + sinkBucket + "/" + prefix, null, dfsClusterConfig, 
                 sysProps.getString(HBackupConfig.CONF_SINKS3ACCESSKEY), 
-                sysProps.getString(HBackupConfig.CONF_SINKS3SECRET),
-                MultipartUtils.MIN_PART_SIZE, // Smallest part size (5MB) will cause multipart upload of 6MB file 
-                MultipartUtils.MIN_PART_SIZE, // Use multipart upload if the object is at least this many bytes
-                new org.apache.hadoop.conf.Configuration(),
-                true,
-                null,
-                null,
-                0,
-                null,
-                null);
+                sysProps.getString(HBackupConfig.CONF_SINKS3SECRET));
         new HBackup(conf).runWithCheckedExceptions();
         TestUtil.verifyS3Obj(sinkService, sinkBucket, key, sixMegBuf);
     }
@@ -222,24 +193,9 @@ public class S3Test extends S3SetupAndTeardownTest {
         String sourceUri = "hdfs://localhost:" + dfsCluster.getNameNodePort() + filename; 
         
         SystemConfiguration sysProps = new SystemConfiguration();
-        HBackupConfig conf = new HBackupConfig(
-                sourceUri,
-                "s3://" + sinkBucket + "/prefix",
-                2,
-                true,
-                null,
-                null,
-                sysProps.getString(HBackupConfig.CONF_SINKS3ACCESSKEY), 
-                sysProps.getString(HBackupConfig.CONF_SINKS3SECRET),
-                MultipartUtils.MIN_PART_SIZE, // Smallest part size (5MB) will cause multipart upload of 6MB file 
-                MultipartUtils.MIN_PART_SIZE, // Use multipart upload if the object is at least this many bytes
-                new org.apache.hadoop.conf.Configuration(),
-                true,
-                null,
-                null,
-                0,
-                null,
-                null);
+        HBackupConfig conf = HBackupConfig.forTests(sourceUri, "s3://" + sinkBucket + "/prefix", null,
+                dfsClusterConfig, sysProps.getString(HBackupConfig.CONF_SINKS3ACCESSKEY),
+                sysProps.getString(HBackupConfig.CONF_SINKS3SECRET));
         
         // The first time we run a backup, the file should be copied over.
         HBackup hbackup;
@@ -262,7 +218,10 @@ public class S3Test extends S3SetupAndTeardownTest {
         sourceService.putObject(sourceBucket, new S3Object(filename, contents));
         TestUtil.verifyS3Obj(sourceService, sourceBucket, filename, contents);
         
-        TestUtil.runBackup("s3://" + sourceBucket, "hdfs://localhost:" + dfsCluster.getNameNodePort());
+        HBackupConfig conf = HBackupConfig.forTests("s3://" + sourceBucket, 
+                "hdfs://localhost:" + dfsCluster.getNameNodePort(), dfsClusterConfig); 
+        new HBackup(conf).runWithCheckedExceptions();
+//        TestUtil.runBackup("s3://" + sourceBucket, "hdfs://localhost:" + dfsCluster.getNameNodePort());
         TestUtil.verifyHdfsContents(dfsCluster.getFileSystem(), filename, "");
     }
     
@@ -277,24 +236,10 @@ public class S3Test extends S3SetupAndTeardownTest {
         TestUtil.verifyS3Obj(sourceService, sourceBucket, filename, contents.getBytes());
         
         SystemConfiguration sysProps = new SystemConfiguration();
-        HBackupConfig conf = new HBackupConfig(
-                "s3://" + sourceBucket,
-                "s3://" + sinkBucket,
-                2,
-                true,
+        HBackupConfig conf = HBackupConfig.forTests("s3://" + sourceBucket, "s3://" + sinkBucket, 
+                "s3://" + sinkBucket + "/hashes", dfsClusterConfig, 
                 sysProps.getString(HBackupConfig.CONF_SOURCES3ACCESSKEY), 
-                sysProps.getString(HBackupConfig.CONF_SOURCES3SECRET),
-                sysProps.getString(HBackupConfig.CONF_SINKS3ACCESSKEY), 
-                sysProps.getString(HBackupConfig.CONF_SINKS3SECRET),
-                MultipartUtils.MIN_PART_SIZE, // Smallest part size (5MB) will cause multipart upload of 6MB file 
-                MultipartUtils.MIN_PART_SIZE, // Use multipart upload if the object is at least this many bytes
-                new org.apache.hadoop.conf.Configuration(),
-                true,
-                null,
-                "s3://" + sinkBucket + "/hashes",
-                0,
-                sysProps.getString(HBackupConfig.CONF_CHECKSUMS3ACCESSKEY),
-                sysProps.getString(HBackupConfig.CONF_CHECKSUMS3SECRET));
+                sysProps.getString(HBackupConfig.CONF_SOURCES3SECRET));
         HBackup hBackup;
         hBackup = new HBackup(conf);
         hBackup.runWithCheckedExceptions();
@@ -314,24 +259,10 @@ public class S3Test extends S3SetupAndTeardownTest {
         sourceService.putObject(sourceBucket, new S3Object(filename, contents));
         
         SystemConfiguration sysProps = new SystemConfiguration();
-        HBackupConfig conf = new HBackupConfig(
-                "s3://" + sourceBucket,
-                "s3://" + sinkBucket,
-                2,
-                true,
+        HBackupConfig conf = HBackupConfig.forTests("s3://" + sourceBucket, "s3://" + sinkBucket, 
+                "s3://" + sinkBucket + "/hashes", dfsClusterConfig, 
                 sysProps.getString(HBackupConfig.CONF_SOURCES3ACCESSKEY), 
-                sysProps.getString(HBackupConfig.CONF_SOURCES3SECRET),
-                sysProps.getString(HBackupConfig.CONF_SINKS3ACCESSKEY), 
-                sysProps.getString(HBackupConfig.CONF_SINKS3SECRET),
-                MultipartUtils.MIN_PART_SIZE, // Smallest part size (5MB) will cause multipart upload of 6MB file 
-                MultipartUtils.MIN_PART_SIZE, // Use multipart upload if the object is at least this many bytes
-                new org.apache.hadoop.conf.Configuration(),
-                true,
-                null,
-                "s3://" + sinkBucket + "/hashes",
-                0,
-                sysProps.getString(HBackupConfig.CONF_CHECKSUMS3ACCESSKEY),
-                sysProps.getString(HBackupConfig.CONF_CHECKSUMS3SECRET));
+                sysProps.getString(HBackupConfig.CONF_SOURCES3SECRET));
         HBackup hBackup;
         hBackup = new HBackup(conf);
         hBackup.runWithCheckedExceptions();
@@ -342,7 +273,7 @@ public class S3Test extends S3SetupAndTeardownTest {
     }
 
     public static void runBackup(String from, String to) throws Exception {
-        HBackupConfig conf = HBackupConfig.forTests(from, to);
+        HBackupConfig conf = HBackupConfig.forTests(from, to, dfsClusterConfig);
         new HBackup(conf).runWithCheckedExceptions();
     }
 }

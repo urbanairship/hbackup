@@ -42,7 +42,7 @@ public class HdfsSink extends Sink {
         }
         this.baseName = tempBaseName;
         this.conf = conf;
-        org.apache.hadoop.conf.Configuration hadoopConf = new org.apache.hadoop.conf.Configuration();
+        org.apache.hadoop.conf.Configuration hadoopConf = conf.hdfsSinkConf;
         FileSystem fs = FileSystem.get(uri, hadoopConf);
         if(!(fs instanceof DistributedFileSystem)) {
             throw new RuntimeException("Hadoop FileSystem instance for URI was not an HDFS DistributedFileSystem");

@@ -1,7 +1,5 @@
 package com.urbanairship.hbackup;
-import org.apache.hadoop.conf.Configuration;
 import org.jets3t.service.model.S3Object;
-import org.jets3t.service.utils.MultipartUtils;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Assert;
@@ -51,23 +49,10 @@ public class ChecksumVerifierTest extends S3SetupAndTeardownTest{
         sinkService.putObject(sourceBucket, new S3Object("files/file_with_bad_checksum", buf2));
         sinkService.putObject(sourceBucket, new S3Object("hashes/file_with_bad_checksum", "1234567"));
         
-        HBackupConfig conf = new HBackupConfig("s3://" + sourceBucket + "/files",
-                null,
-                2,
-                true,
+        HBackupConfig conf = HBackupConfig.forTests("s3://" + sourceBucket + "/files",
+                null, "s3://" + sourceBucket + "/hashes", dfsClusterConfig,
                 System.getProperty(HBackupConfig.CONF_SOURCES3ACCESSKEY),
-                System.getProperty(HBackupConfig.CONF_SOURCES3SECRET),
-                null,
-                null,
-                MultipartUtils.MIN_PART_SIZE,
-                MultipartUtils.MIN_PART_SIZE,
-                new Configuration(),
-                true,
-                null,
-                "s3://" + sourceBucket + "/hashes",
-                1,
-                System.getProperty(HBackupConfig.CONF_CHECKSUMS3ACCESSKEY),
-                System.getProperty(HBackupConfig.CONF_CHECKSUMS3SECRET));
+                System.getProperty(HBackupConfig.CONF_SOURCES3SECRET));
         ChecksumVerify checksumVerify = new ChecksumVerify(conf);
         Assert.assertEquals(false, checksumVerify.runWithCheckedExceptions());
         
@@ -96,21 +81,8 @@ public class ChecksumVerifierTest extends S3SetupAndTeardownTest{
         sinkService.putObject(sourceBucket, new S3Object(file2Key, buf2));
         sinkService.putObject(sourceBucket, new S3Object(hash2Key, TestUtil.expectedXor(buf2)));
         
-        HBackupConfig conf = new HBackupConfig("s3://" + sourceBucket + "/files",
-                null,
-                2,
-                true,
-                System.getProperty(HBackupConfig.CONF_SOURCES3ACCESSKEY),
-                System.getProperty(HBackupConfig.CONF_SOURCES3SECRET),
-                null,
-                null,
-                MultipartUtils.MIN_PART_SIZE,
-                MultipartUtils.MIN_PART_SIZE,
-                new Configuration(),
-                true,
-                null,
-                "s3://" + sourceBucket + "/hashes",
-                1,
+        HBackupConfig conf = HBackupConfig.forTests("s3://" + sourceBucket + "/files", (String)null,
+                "s3://" + sourceBucket + "/hashes",  dfsClusterConfig,
                 System.getProperty(HBackupConfig.CONF_CHECKSUMS3ACCESSKEY),
                 System.getProperty(HBackupConfig.CONF_CHECKSUMS3SECRET));
         ChecksumVerify checksumVerify = new ChecksumVerify(conf);
@@ -129,23 +101,28 @@ public class ChecksumVerifierTest extends S3SetupAndTeardownTest{
         
         sinkService.putObject(sourceBucket, new S3Object(file1Key, buf1));
         
-        HBackupConfig conf = new HBackupConfig("s3://" + sourceBucket + "/files",
-                null,
-                2,
-                true,
-                System.getProperty(HBackupConfig.CONF_SOURCES3ACCESSKEY),
-                System.getProperty(HBackupConfig.CONF_SOURCES3SECRET),
-                null,
-                null,
-                MultipartUtils.MIN_PART_SIZE,
-                MultipartUtils.MIN_PART_SIZE,
-                new Configuration(),
-                true,
-                null,
-                "s3://" + sourceBucket + "/hashes",
-                1,
+        HBackupConfig conf = HBackupConfig.forTests("s3://" + sourceBucket + "/files", null, 
+                "s3://" + sourceBucket + "/hashes", dfsClusterConfig, null, 
                 System.getProperty(HBackupConfig.CONF_CHECKSUMS3ACCESSKEY),
                 System.getProperty(HBackupConfig.CONF_CHECKSUMS3SECRET));
+        
+//        HBackupConfig conf = new HBackupConfig("s3://" + sourceBucket + "/files",
+//                null,
+//                2,
+//                true,
+//                System.getProperty(HBackupConfig.CONF_SOURCES3ACCESSKEY),
+//                System.getProperty(HBackupConfig.CONF_SOURCES3SECRET),
+//                null,
+//                null,
+//                MultipartUtils.MIN_PART_SIZE,
+//                MultipartUtils.MIN_PART_SIZE,
+//                new Configuration(),
+//                true,
+//                null,
+//                "s3://" + sourceBucket + "/hashes",
+//                1,
+//                System.getProperty(HBackupConfig.CONF_CHECKSUMS3ACCESSKEY),
+//                System.getProperty(HBackupConfig.CONF_CHECKSUMS3SECRET));
         ChecksumVerify checksumVerify = new ChecksumVerify(conf);
         Assert.assertFalse(checksumVerify.runWithCheckedExceptions());
         ChecksumStats stats = checksumVerify.getStats();

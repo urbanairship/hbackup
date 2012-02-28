@@ -8,6 +8,7 @@ import org.apache.commons.configuration.CompositeConfiguration;
 import org.apache.commons.configuration.ConfigurationException;
 import org.apache.commons.configuration.PropertiesConfiguration;
 import org.apache.commons.configuration.SystemConfiguration;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.jets3t.service.security.AWSCredentials;
@@ -51,7 +52,8 @@ public class HBackupConfig {
     public final AWSCredentials s3ChecksumCredentials;
     public final long s3PartSize;
     public final long s3MultipartThreshold;
-    public final org.apache.hadoop.conf.Configuration hadoopConf;
+    public final org.apache.hadoop.conf.Configuration hdfsSourceConf;
+    public final org.apache.hadoop.conf.Configuration hdfsSinkConf;
     public final boolean mtimeCheck;
     public final String includePathsRegex;
     public final String checksumUri;
@@ -59,10 +61,9 @@ public class HBackupConfig {
     
     public HBackupConfig(String from, String to, int concurrentFiles, boolean recursive, 
             String sourceS3AccessKey, String sourceS3Secret, String sinkS3AccessKey, String sinkS3Secret,
-            long s3PartSize, long s3MultipartThreshold, 
-            org.apache.hadoop.conf.Configuration hadoopConf, boolean mtimeCheck,
-            String includePathsRegex, String checksumUri, int chunkRetries,
-            String checksumS3AccessKey, String checksumS3Secret) {
+            long s3PartSize, long s3MultipartThreshold, Configuration hdfsSourceConf, 
+            Configuration hdfsSinkConf, boolean mtimeCheck, String includePathsRegex, 
+            String checksumUri, int chunkRetries, String checksumS3AccessKey, String checksumS3Secret) {
 //        if(from == null || to == null) {
 //            throw new IllegalArgumentException("from and to cannot be null");
 //        }
@@ -82,7 +83,8 @@ public class HBackupConfig {
         this.recursive = recursive;
         this.s3PartSize = s3PartSize;
         this.s3MultipartThreshold = s3MultipartThreshold;
-        this.hadoopConf = hadoopConf;
+        this.hdfsSourceConf = hdfsSourceConf;
+        this.hdfsSinkConf = hdfsSinkConf;
         this.mtimeCheck = mtimeCheck;
         this.includePathsRegex = includePathsRegex;
         this.checksumUri = checksumUri;
@@ -112,7 +114,7 @@ public class HBackupConfig {
      * from the system properties, or null. Hadoop config will be the default (parse normal Hadoop config 
      * files from the classpath).
      */
-    public static HBackupConfig forTests(String from, String to) {
+    public static HBackupConfig forTests(String from, String to, Configuration hdfsConf) {
         SystemConfiguration sysProps = new SystemConfiguration();
         return new HBackupConfig(from, 
                 to, 
@@ -124,13 +126,65 @@ public class HBackupConfig {
                 sysProps.getString(CONF_SINKS3SECRET),
                 DEFAULT_S3_PART_SIZE, 
                 DEFAULT_S3_MULTIPART_THRESHOLD, 
-                new org.apache.hadoop.conf.Configuration(),
+                hdfsConf,
+                hdfsConf,
                 true,
                 null,
                 null,
                 0, // Any retries would probably make test failures more confusing
                 null,
                 null);
+    }
+    
+    /**
+     * Get config with defaults for all params except those specified. For testing only.
+     */
+    public static HBackupConfig forTests(String fromUri, String toUri, String hashUri, 
+            Configuration hdfsConf, String s3AccessKey, String s3Secret) {
+        return new HBackupConfig(fromUri,
+                toUri,
+                2,
+                true,
+                s3AccessKey,
+                s3Secret,
+                s3AccessKey,
+                s3Secret,
+                MultipartUtils.MIN_PART_SIZE,
+                MultipartUtils.MIN_PART_SIZE,
+                hdfsConf,
+                hdfsConf,
+                true,
+                null,
+                hashUri,
+                1,
+                s3AccessKey,
+                s3Secret);
+    }
+    
+    /**
+     * Get config with defaults for all params except those specified. For testing only.
+     */
+    public static HBackupConfig forTests(String fromUri, String toUri, String hashUri, 
+            Configuration hdfsSrcConf, Configuration hdfsSinkConf, String s3AccessKey, 
+            String s3Secret) {
+        return new HBackupConfig(fromUri,
+                toUri,
+                2,
+                true,
+                s3AccessKey,
+                s3Secret,
+                null,
+                null,
+                MultipartUtils.MIN_PART_SIZE,
+                MultipartUtils.MIN_PART_SIZE,
+                hdfsSrcConf,
+                hdfsSinkConf,
+                true,
+                null,
+                hashUri,
+                1,
+                s3AccessKey,
+                s3Secret);
     }
 
     /**
@@ -201,6 +255,7 @@ public class HBackupConfig {
                 conf.getString(CONF_SINKS3SECRET, null), 
                 conf.getLong(CONF_S3PARTSIZE, DEFAULT_S3_PART_SIZE),
                 conf.getLong(CONF_S3MULTIPARTTHRESHOLD, DEFAULT_S3_MULTIPART_THRESHOLD),
+                new org.apache.hadoop.conf.Configuration(true),
                 new org.apache.hadoop.conf.Configuration(true),
                 conf.getBoolean(CONF_MTIMECHECK, DEFAULT_MTIMECHECK),
                 conf.getString(CONF_INCLUDEPATHSREGEX, null),

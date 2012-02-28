@@ -31,10 +31,10 @@ public abstract class TestUtil {
         Assert.assertArrayEquals(expectedContents, buf);
     }
     
-    public static void runBackup(String source, String dest) throws Exception {
-        HBackupConfig conf = HBackupConfig.forTests(source, dest);
-        new HBackup(conf).runWithCheckedExceptions();
-    }
+//    public static void runBackup(String source, String dest, Configuration conf) throws Exception {
+//        HBackupConfig config = HBackupConfig.forTests(source, dest, conf);
+//        new HBackup(config).runWithCheckedExceptions();
+//    }
     
     public static void shutdownMiniDfs(MiniDFSCluster cluster) {
         // This code was mostly copied from HBase 0.90.4 HBaseClusterTestCase.java -DR

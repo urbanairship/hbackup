@@ -29,7 +29,7 @@ public class HdfsSource extends Source {
     public HdfsSource(URI sourceUri, HBackupConfig conf) 
             throws IOException, URISyntaxException {
         this.baseUri = sourceUri;
-        org.apache.hadoop.conf.Configuration hadoopConf = new org.apache.hadoop.conf.Configuration();
+        org.apache.hadoop.conf.Configuration hadoopConf = conf.hdfsSourceConf;
         FileSystem fs = FileSystem.get(baseUri, hadoopConf);
         if(!(fs instanceof DistributedFileSystem)) {
             throw new RuntimeException("Hadoop FileSystem instance for URI was not an HDFS DistributedFileSystem");

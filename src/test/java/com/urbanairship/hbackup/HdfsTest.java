@@ -78,7 +78,8 @@ public class HdfsTest {
         writeFile(srcFs, "/copysrc/myfile.txt", FILE_CONTENTS);
         
         HBackup hBackup = new HBackup(HBackupConfig.forTests(getSourceUrl("/copysrc"), 
-                getSinkUrl("/copydest")));
+                getSinkUrl("/copydest"), null, srcFs.getConf(),
+                sinkFs.getConf(), null, null));
         hBackup.runWithCheckedExceptions();
         
         Assert.assertTrue(sinkFs.exists(new Path("/copydest/myfile.txt")));
@@ -100,9 +101,10 @@ public class HdfsTest {
         TestUtil.verifyHdfsContents(srcFs, sourceName, initialContents);
         
         // Backup from source to dest and verify that it worked
-        String source = getSourceUrl("/from");
-        String dest = getSinkUrl("/to");
-        TestUtil.runBackup(source, dest);
+        HBackupConfig conf = HBackupConfig.forTests(getSourceUrl("/from"), 
+                getSinkUrl("/to"), null, srcFs.getConf(), 
+                sinkFs.getConf(), null, null);
+        new HBackup(conf).runWithCheckedExceptions();
         TestUtil.verifyHdfsContents(sinkFs, sinkName, initialContents);
         
         // Verify that the sink file has the same mtime as the source file
@@ -112,7 +114,7 @@ public class HdfsTest {
         
         // Modify the source file and run another backup. The destination should pick up the change.
         writeFile(srcFs, sourceName, modifiedContents);
-        TestUtil.runBackup(getSourceUrl("/from"), getSinkUrl("/to"));
+        new HBackup(conf).runWithCheckedExceptions();
         TestUtil.verifyHdfsContents(sinkFs, sinkName, modifiedContents);
     }
     
@@ -125,19 +127,22 @@ public class HdfsTest {
         writeFile(srcFs, "/from/i_do_match.txt", "Taco");
         writeFile(srcFs, "/from/i_dont_match.txt", "Burrito");
         
+//        HBackupConfig conf = HBackupConfig.forTests(getSourceUrl("/from"), getSinkUrl("/to"),
+//                null, srcFs.getConf(), sinkFs.getConf(), null, null);
         HBackupConfig conf = new HBackupConfig(
-                getSourceUrl("/from"),
+                getSourceUrl("/from"), 
                 getSinkUrl("/to"),
-                2,
+                1,
                 true,
                 null,
                 null,
-                null, 
                 null,
-                MultipartUtils.MIN_PART_SIZE, // Smallest part size (5MB) will cause multipart upload of 6MB file 
-                MultipartUtils.MIN_PART_SIZE, // Use multipart upload if the object is at least this many bytes
-                new org.apache.hadoop.conf.Configuration(),
-                true,
+                null,
+                MultipartUtils.MIN_PART_SIZE,
+                MultipartUtils.MIN_PART_SIZE, 
+                srcFs.getConf(),
+                sinkFs.getConf(),
+                false, 
                 ".*do_match.*",
                 null,
                 0,
@@ -155,7 +160,9 @@ public class HdfsTest {
     @Test
     public void emptyFileTest() throws Exception {
         writeFile(srcFs, "/from/empty.txt", "");
-        TestUtil.runBackup(getSourceUrl("/from"), getSinkUrl("/to"));
+        HBackupConfig config = HBackupConfig.forTests(getSourceUrl("/from"), 
+                getSinkUrl("/to"), null, srcFs.getConf(), sinkFs.getConf(), null, null);
+        new HBackup(config).runWithCheckedExceptions();
         Assert.assertTrue(sinkFs.exists(new Path("/to/empty.txt")));
     }
     
