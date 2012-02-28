@@ -1,4 +1,4 @@
-package checksumverify;
+package com.urbanairship.hbackup.checksumverify;
 
 import java.io.IOException;
 import java.net.URI;
