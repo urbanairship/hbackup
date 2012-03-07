@@ -19,7 +19,6 @@ import com.urbanairship.hbackup.Constant;
 import com.urbanairship.hbackup.SourceFile;
 import com.urbanairship.hbackup.HBackupConfig;
 import com.urbanairship.hbackup.Source;
-import com.urbanairship.hbackup.Stats;
 
 public class Jets3tSource extends Source {
     private static final Logger log = LogManager.getLogger(Jets3tSource.class);
@@ -28,7 +27,7 @@ public class Jets3tSource extends Source {
     private final String bucketName;
     private final String baseName;
     
-    public Jets3tSource(URI uri, HBackupConfig conf, Stats stats) throws IOException {
+    public Jets3tSource(URI uri, HBackupConfig conf) throws IOException {
         this.bucketName = uri.getHost();
         
         // The basename should consist of zero or more repetitions of "somestring/".

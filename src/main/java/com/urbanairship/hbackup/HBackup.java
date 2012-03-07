@@ -3,6 +3,8 @@ package com.urbanairship.hbackup;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -36,7 +38,7 @@ public class HBackup implements Runnable {
     public HBackup(HBackupConfig conf) throws URISyntaxException, IOException {
         this.conf = conf;
         this.stats = new Stats();
-        this.source = Source.forUri(new URI(conf.from), conf, stats);
+        this.source = Source.forUri(new URI(conf.from), conf);
         this.sink = Sink.forUri(new URI(conf.to), conf, stats);
         if(conf.checksumUri != null) {
             this.checksumService = ChecksumService.forUri(new URI(conf.checksumUri), conf);
@@ -57,8 +59,8 @@ public class HBackup implements Runnable {
     public void runWithCheckedExceptions() throws IOException, InterruptedException {
         BlockingQueue<Runnable> workQueue = new LinkedBlockingQueue<Runnable>();
         
-        ThreadPoolExecutor executor = new ThreadPoolExecutor(conf.concurrentFiles, conf.concurrentFiles, 10, 
-                TimeUnit.SECONDS, workQueue);
+        ThreadPoolExecutor executor = new ThreadPoolExecutor(conf.concurrentFiles, conf.concurrentFiles, 
+                Long.MAX_VALUE, TimeUnit.SECONDS, workQueue);
         
         Pattern p = null;
         if(conf.includePathsRegex != null) {
@@ -97,22 +99,25 @@ public class HBackup implements Runnable {
                 for(RetryableChunk chunk: chunks) {
                     // Enqueue each chunk for transfer
                     executor.execute(new ChunkRetryer(fileState, chunk, checksumService,
-                            conf.chunkRetries, stats));
+                            conf.numRetries, stats));
                 }
 
             } catch (IOException e) {
                 log.error("Skipping file " + file.getRelativePath() + " due to exception", e);
+                stats.numFilesFailed.incrementAndGet();
             }
         }
        
         executor.shutdown();
         executor.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
         
-        log.info("Files copied:  " + stats.numFilesSucceeded.get());
-        log.info("Files skipped: " + stats.numUpToDateFilesSkipped.get());
-        log.info("Files failed:  " + stats.numFilesFailed.get());
-        log.info("Chunks copied: " + stats.numChunksSucceeded.get());
-        log.info("Chunks failed: " + stats.numChunksFailed.get());
+        log.info("Files copied:      " + stats.numFilesSucceeded.get());
+        log.info("Files skipped:     " + stats.numUpToDateFilesSkipped.get());
+        log.info("Files failed:      " + stats.numFilesFailed.get());
+        log.info("Chunks copied:     " + stats.numChunksSucceeded.get());
+        log.info("Chunks failed:     " + stats.numChunksFailed.get());
+        log.info("Checksums saved:   " + stats.numChecksumsSucceeded.get());
+        log.info("Checksums unsaved: " + stats.numChecksumsFailed.get());
         
         // Re-throw the first exception seen by a worker thread, if any exceptions occurred
         if(!stats.fileFailureExceptions.isEmpty()) {
@@ -126,11 +131,20 @@ public class HBackup implements Runnable {
     }
 
     public static void main(String[] args) throws Exception {
+        if(Arrays.asList(args).contains("--usage")) {
+            System.err.println(usage());
+            System.exit(0);
+        }
+        
         HBackup hBackup = null;
         try {
-            hBackup = new HBackup(HBackupConfig.fromEnv(args));
+            HBackupConfig conf = HBackupConfig.fromEnv(args);
+            if(conf.from == null || conf.to == null) {
+                throw new IllegalArgumentException("Source or sink URI was null");
+            }
+            hBackup = new HBackup(conf);
         } catch (IllegalArgumentException e) {
-            log.error(e);
+            log.error("Invalid configuration", e);
             System.err.println(usage());
             System.exit(1);
         }

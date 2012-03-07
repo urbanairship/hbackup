@@ -1,5 +1,7 @@
 package com.urbanairship.hbackup;
 
+import java.io.IOException;
+
 public class FileTransferState {
     private final SourceFile sourceFile;
     private final Stats stats;
@@ -15,7 +17,7 @@ public class FileTransferState {
         this.chunksOutstanding = numChunks;
     }
     
-    synchronized State getState() {
+    synchronized public State getState() {
         return state;
     }
     
@@ -23,11 +25,20 @@ public class FileTransferState {
         return sourceFile;
     }
     
-    synchronized void chunkError() {
+    synchronized public void chunkError() {
+        chunkError(null);
+    }
+    
+    synchronized public void chunkError(IOException e) {
         if(state != State.PENDING && state != State.ERROR) {
             throw new RuntimeException("Invalid state " + state);
         }
-
+        
+        if(state == State.PENDING && e != null) {
+            // This is the first exception for this file. Save it so we can print a diagnostic
+            // message later.
+            stats.fileFailureExceptions.add(e);
+        }
         stats.numChunksFailed.incrementAndGet();
         chunksOutstanding--;
         if(state != State.ERROR) { 
@@ -40,7 +51,7 @@ public class FileTransferState {
      * @return whether all chunks for the file have now been sent. The caller may want to "commit" the
      * new object since all chunks have finished.
      */
-    synchronized boolean chunkSuccess(StreamingXor checksum) {
+    synchronized public boolean chunkSuccess(StreamingXor checksum) {
         combinedChecksum.update(checksum);
         if(state != State.PENDING && state != State.ERROR) {
             throw new RuntimeException("Invalid state " + state);
@@ -55,7 +66,7 @@ public class FileTransferState {
         }
     }
     
-    synchronized void chunkSkipped() {
+    synchronized public void chunkSkipped() {
         if(state != State.ERROR) {
             throw new RuntimeException("Invalid state " + state);
         }
@@ -63,7 +74,7 @@ public class FileTransferState {
         chunksOutstanding--;
     }
     
-    synchronized void fileCommitted() {
+    synchronized public void fileCommitted() {
         if(state != State.CHUNKS_COMPLETE) {
             throw new RuntimeException("Invalid state " + state);
         }
@@ -73,5 +84,13 @@ public class FileTransferState {
     
     synchronized public String getCombinedChecksum() {
         return combinedChecksum.getXorHex();
+    }
+    
+    public void checksumSuccess() {
+        stats.numChecksumsSucceeded.incrementAndGet();
+    }
+    
+    public void checksumFailed() {
+        stats.numChecksumsFailed.incrementAndGet();
     }
 }

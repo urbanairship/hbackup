@@ -42,7 +42,7 @@ public class HdfsSink extends Sink {
         }
         this.baseName = tempBaseName;
         this.conf = conf;
-        org.apache.hadoop.conf.Configuration hadoopConf = new org.apache.hadoop.conf.Configuration();
+        org.apache.hadoop.conf.Configuration hadoopConf = conf.hdfsSinkConf;
         FileSystem fs = FileSystem.get(uri, hadoopConf);
         if(!(fs instanceof DistributedFileSystem)) {
             throw new RuntimeException("Hadoop FileSystem instance for URI was not an HDFS DistributedFileSystem");
@@ -77,6 +77,19 @@ public class HdfsSink extends Sink {
             log.debug("Sink file " + path + " didn't exist for source file " + sourceFile.getRelativePath() +
                     ". Will re-upload.");
             return false;
+        }
+    }
+    
+    /**
+     * @return the file mtime as UTC epoch millis if the file exists, or null if it doesn't exist.
+     */
+    @Override
+    public Long getMTime(String relativePath) throws IOException {
+        try {
+            FileStatus stat = dfs.getFileStatus(new Path(baseName + relativePath));
+            return stat.getModificationTime();
+        } catch (FileNotFoundException e) {
+            return null;
         }
     }
 
