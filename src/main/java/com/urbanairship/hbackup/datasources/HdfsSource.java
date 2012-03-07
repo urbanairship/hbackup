@@ -17,20 +17,19 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import com.google.common.io.LimitInputStream;
-import com.urbanairship.hbackup.SourceFile;
 import com.urbanairship.hbackup.HBackupConfig;
 import com.urbanairship.hbackup.Source;
-import com.urbanairship.hbackup.Stats;
+import com.urbanairship.hbackup.SourceFile;
 
 public class HdfsSource extends Source {
     private static final Logger log = LogManager.getLogger(HdfsSource.class);
     private final DistributedFileSystem dfs;
     private final URI baseUri;
     
-    public HdfsSource(URI sourceUri, HBackupConfig conf, Stats stats) 
+    public HdfsSource(URI sourceUri, HBackupConfig conf) 
             throws IOException, URISyntaxException {
         this.baseUri = sourceUri;
-        org.apache.hadoop.conf.Configuration hadoopConf = new org.apache.hadoop.conf.Configuration();
+        org.apache.hadoop.conf.Configuration hadoopConf = conf.hdfsSourceConf;
         FileSystem fs = FileSystem.get(baseUri, hadoopConf);
         if(!(fs instanceof DistributedFileSystem)) {
             throw new RuntimeException("Hadoop FileSystem instance for URI was not an HDFS DistributedFileSystem");

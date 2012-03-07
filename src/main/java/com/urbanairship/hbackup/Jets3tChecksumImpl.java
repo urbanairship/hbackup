@@ -60,7 +60,11 @@ public class Jets3tChecksumImpl extends ChecksumService {
             IOUtils.copy(is, stringWriter);
             return stringWriter.toString();
         } catch (ServiceException e) {
-            throw new IOException(e);
+            if(e.getResponseCode() == 404) {
+                return null;
+            } else {
+                throw new IOException(e);
+            }
         } finally {
             if(s3Object != null) {
                 s3Object.closeDataInputStream();

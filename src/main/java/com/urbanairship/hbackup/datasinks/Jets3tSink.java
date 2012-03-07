@@ -54,8 +54,6 @@ public class Jets3tSink extends Sink {
         }
     }
     
-    
-
     @Override
     public boolean existsAndUpToDate(SourceFile file) throws IOException {
         try {
@@ -116,6 +114,40 @@ public class Jets3tSink extends Sink {
         }
     }
 
+    @Override
+    public Long getMTime(String relativePath) throws IOException {
+        try {
+            StorageObject s3Obj = s3Service.getObjectDetails(bucketName, baseName + relativePath);
+            
+            // If the object was backed up to S3 by hbackup, it may have a our special app-specific
+            // metadata attached giving the mtime of the source file. We'll use this as the mtime
+            // for staleness checking purposes.
+            
+            Object mtimeObj = s3Obj.getMetadataMap().get(Constant.S3_SOURCE_MTIME);
+            if(mtimeObj != null) {
+                if(mtimeObj instanceof String) {
+                    try {
+                        return Long.valueOf((String)mtimeObj);
+                    } catch (NumberFormatException e) { }
+                } 
+                final String msg = "Malformed S3 source mtime metadata for " + relativePath; 
+                log.error(msg);
+                throw new IOException(msg);
+            } else {
+                // Special hbackup source mtime metadata wasn't present. Fall back on S3's built in 
+                // last-modified timestamp.
+                return s3Obj.getLastModifiedDate().getTime();
+            }
+        } catch (ServiceException e) {
+            if(e.getResponseCode() == 404) {
+                return null;
+            } else {
+                // It was a serious exception and not just a 404. Re-throw.
+                throw new IOException(e);
+            }
+        }
+    }
+    
 //    private static enum MultipartTransferState {BEFORE_INIT, IN_PROGRESS, ERROR, DONE};
     
     /**

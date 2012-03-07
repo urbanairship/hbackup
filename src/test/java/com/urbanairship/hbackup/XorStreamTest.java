@@ -4,7 +4,6 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.util.Random;
 
-import org.apache.commons.codec.binary.Hex;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -16,7 +15,7 @@ public class XorStreamTest {
         // Compute hashes of random buffers from size 0 to 100
         for(int size=0; size<100; size++) {
             byte[] bytes = randomBytes(size);
-            Assert.assertEquals(expectedXor(bytes), 
+            Assert.assertEquals(TestUtil.expectedXor(bytes), 
                     streamingXor(bytes, 0, bytes.length).getXorHex());
         }
     }
@@ -37,7 +36,7 @@ public class XorStreamTest {
             offset += chunkSize;
         }
         
-        Assert.assertEquals(expectedXor(bytes), streamingXor.getXorHex());
+        Assert.assertEquals(TestUtil.expectedXor(bytes), streamingXor.getXorHex());
     }
     
     private static byte[] randomBytes(int size) {
@@ -57,16 +56,5 @@ public class XorStreamTest {
         
         return xis.getStreamingXor();
     }
-    
-    public static String expectedXor(byte[] bytes) {
-        byte[] xor = new byte[8];
-        for(int i=0; i<Math.min(bytes.length, 8); i++) {
-            xor[i%8] = bytes[i];
-        }
-        for(int i=8; i<bytes.length; i++) {
-            xor[i%8] ^= bytes[i];
-        }
-        
-        return new String(Hex.encodeHex(xor));
-    }
+
 }
