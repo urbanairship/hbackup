@@ -107,23 +107,6 @@ public class ChecksumVerifierTest extends S3SetupAndTeardownTest{
                 System.getProperty(HBackupConfig.CONF_CHECKSUMS3ACCESSKEY),
                 System.getProperty(HBackupConfig.CONF_CHECKSUMS3SECRET));
         
-//        HBackupConfig conf = new HBackupConfig("s3://" + sourceBucket + "/files",
-//                null,
-//                2,
-//                true,
-//                System.getProperty(HBackupConfig.CONF_SOURCES3ACCESSKEY),
-//                System.getProperty(HBackupConfig.CONF_SOURCES3SECRET),
-//                null,
-//                null,
-//                MultipartUtils.MIN_PART_SIZE,
-//                MultipartUtils.MIN_PART_SIZE,
-//                new Configuration(),
-//                true,
-//                null,
-//                "s3://" + sourceBucket + "/hashes",
-//                1,
-//                System.getProperty(HBackupConfig.CONF_CHECKSUMS3ACCESSKEY),
-//                System.getProperty(HBackupConfig.CONF_CHECKSUMS3SECRET));
         ChecksumVerify checksumVerify = new ChecksumVerify(conf);
         Assert.assertFalse(checksumVerify.runWithCheckedExceptions());
         ChecksumStats stats = checksumVerify.getStats();

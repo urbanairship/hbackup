@@ -3,6 +3,8 @@ package com.urbanairship.hbackup;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -129,11 +131,20 @@ public class HBackup implements Runnable {
     }
 
     public static void main(String[] args) throws Exception {
+        if(Arrays.asList(args).contains("--usage")) {
+            System.err.println(usage());
+            System.exit(0);
+        }
+        
         HBackup hBackup = null;
         try {
-            hBackup = new HBackup(HBackupConfig.fromEnv(args));
+            HBackupConfig conf = HBackupConfig.fromEnv(args);
+            if(conf.from == null || conf.to == null) {
+                throw new IllegalArgumentException("Source or sink URI was null");
+            }
+            hBackup = new HBackup(conf);
         } catch (IllegalArgumentException e) {
-            log.error(e);
+            log.error("Invalid configuration", e);
             System.err.println(usage());
             System.exit(1);
         }

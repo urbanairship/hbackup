@@ -290,7 +290,7 @@ public class HBackupConfig {
                 conf.getString(CONF_CHECKSUMS3SECRET, null),
                 conf.getString(CONF_FALLBACKS3ACCESSKEY, null),
                 conf.getString(CONF_FALLBACKS3SECRET, null),
-                conf.getLong(CONF_STALEMILLIS, null));
+                conf.getLong(CONF_STALEMILLIS, DEFAULT_STALEMILLIS));
     }
     
     final public static OptHelp[] optHelps = new OptHelp[] {
