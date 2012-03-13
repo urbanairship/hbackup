@@ -3,7 +3,7 @@ package com.urbanairship.hbackup.service.tasks;
 import com.google.common.util.concurrent.AbstractScheduledService;
 import com.urbanairship.hbackup.HBackup;
 import com.urbanairship.hbackup.HBackupConfig;
-import com.urbanairship.hbackup.service.BackupStats;
+import com.urbanairship.hbackup.service.ScheduledBackupStats;
 import com.yammer.metrics.Metrics;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -12,8 +12,6 @@ import com.yammer.metrics.core.Timer;
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
 import java.lang.management.ManagementFactory;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -23,7 +21,7 @@ public class HBackupScheduled extends AbstractScheduledService {
     private static final Logger log = LogManager.getLogger(HBackupScheduled.class);
     
     private final HBackupConfig config;
-    private final BackupStats backupStatsMBean = new BackupStats();
+    private final ScheduledBackupStats backupStatsMBean = new ScheduledBackupStats();
     private final Timer timer = Metrics.newTimer(HBackup.class, "Backup");
 
     public HBackupScheduled(HBackupConfig config) {
@@ -32,16 +30,16 @@ public class HBackupScheduled extends AbstractScheduledService {
 
 
     @Override
-    protected void runOneIteration() throws Exception {
+    protected void runOneIteration() {
         try {
             log.info("Backup starting.");
-            long start = System.currentTimeMillis();
+            long start = System.nanoTime();
 
             HBackup backup = new HBackup(config);
             backup.runWithCheckedExceptions();
 
             backupStatsMBean.setStats(backup.getStats());
-            timer.update(System.currentTimeMillis() - start, TimeUnit.MILLISECONDS);
+            timer.update(System.nanoTime() - start, TimeUnit.NANOSECONDS);
         } catch (Exception e) {
             log.error("Error performing backup : ", e);
         }

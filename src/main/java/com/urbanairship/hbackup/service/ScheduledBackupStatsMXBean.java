@@ -4,7 +4,7 @@ package com.urbanairship.hbackup.service;
 /**
  * Expose some stats via jmx for the backup.
  */
-public interface BackupStatsMXBean {
+public interface ScheduledBackupStatsMXBean {
 
     public int getNumUpToDateFilesSkipped();
     public int getNumChunksFailed();

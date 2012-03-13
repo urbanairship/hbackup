@@ -6,7 +6,7 @@ import java.util.Date;
 
 /**
  */
-public class BackupStats implements BackupStatsMXBean {
+public class ScheduledBackupStats implements ScheduledBackupStatsMXBean {
 
     
     private Stats stats = new Stats();

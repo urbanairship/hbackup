@@ -25,15 +25,15 @@ public class BackupService {
         int backupInterval = configuration.backupInterval;
 
         if (backupInterval <= 0) {
-            log.info("Backup interval less than or equal to 0, won't run");
-            System.exit(0);
+            log.info("Backup interval less than or equal to 0, won't run, please set hbackup.intervalHrs");
+            System.exit(1);
         }
 
         HBackupScheduled backupThreadService = new HBackupScheduled(configuration);
         backupThreadService.startAndWait();
 
-        int staleCheckInteveral = configuration.staleCheckInteveral;
-        if (staleCheckInteveral > 0) {
+        int staleCheckInterval = configuration.staleCheckInteveral;
+        if (staleCheckInterval > 0) {
             StaleCheckScheduled staleCheckScheduled = new StaleCheckScheduled(configuration);
             staleCheckScheduled.startAndWait();
         }

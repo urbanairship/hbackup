@@ -38,8 +38,8 @@ public class HBackupConfig {
     public static final String CONF_FALLBACKS3ACCESSKEY = "hbackup.s3AccessKey";
     public static final String CONF_FALLBACKS3SECRET = "hbackup.s3Secret";
     public static final String CONF_STALEMILLIS = "hbackup.staleMillis";
-    public static final String CONF_BACKUPINVERVAL = "hbackup.interval";
-    public static final String CONF_STALECHECKINVERVAL = "hbackup.stalecheck.interval";
+    public static final String CONF_BACKUPINVERVAL = "hbackup.intervalHours";
+    public static final String CONF_STALECHECKINVERVAL = "hbackup.stalecheck.intervalHours";
     
     public static final int DEFAULT_CONCURRENT_FILES = 5;
     public static final long DEFAULT_S3_PART_SIZE = 100 * 1024 * 1024;
@@ -48,8 +48,6 @@ public class HBackupConfig {
     public static final boolean DEFAULT_RECURSIVE = true;
     public static final int DEFAULT_CHUNKRETRIES = 4;
     public static final long DEFAULT_STALEMILLIS = TimeUnit.DAYS.toMillis(1);
-    public static final int DEFAULT_BACKUPINTERVAL= -1;
-    public static final int DEFAULT_STALECHECKINVERVAL = -1;
 
     // Config values
     public final String from;
@@ -161,8 +159,8 @@ public class HBackupConfig {
                 null,
                 null,
                 DEFAULT_STALEMILLIS,
-                DEFAULT_BACKUPINTERVAL,
-                DEFAULT_STALECHECKINVERVAL);
+                0,
+                0);
     }
     
     /**
@@ -284,7 +282,7 @@ public class HBackupConfig {
         //system props override anything in the files
         conf.addConfiguration(new SystemConfiguration());
 
-        HBackupConfig config = new HBackupConfig(conf.getString(CONF_FROM, null),
+       return new HBackupConfig(conf.getString(CONF_FROM, null),
                 conf.getString(CONF_TO, null),
                 conf.getInt(CONF_CONCURRENTCHUNKS, DEFAULT_CONCURRENT_FILES),
                 conf.getBoolean(CONF_RECURSIVE, DEFAULT_RECURSIVE),
@@ -305,13 +303,9 @@ public class HBackupConfig {
                 conf.getString(CONF_FALLBACKS3ACCESSKEY, null),
                 conf.getString(CONF_FALLBACKS3SECRET, null),
                 conf.getLong(CONF_STALEMILLIS, DEFAULT_STALEMILLIS),
-                conf.getInt(CONF_BACKUPINVERVAL, DEFAULT_BACKUPINTERVAL),
-                conf.getInt(CONF_STALECHECKINVERVAL, DEFAULT_STALECHECKINVERVAL));
+                conf.getInt(CONF_BACKUPINVERVAL, 0),
+                conf.getInt(CONF_STALECHECKINVERVAL, 0));
 
-        if(config.from == null || config.to == null) {
-            throw new IllegalArgumentException("Source or sink URI was null");
-        }
-        return config;
     }
     
     final public static OptHelp[] optHelps = new OptHelp[] {
@@ -335,7 +329,10 @@ public class HBackupConfig {
             new OptHelp(CONF_CHECKSUMS3SECRET, "If the checksums are stored in a protected S3 bucket, specify the secret"),
             new OptHelp(CONF_FALLBACKS3ACCESSKEY, "Use this for all S3 accesses, if all your S3 usage is done under the same account"),
             new OptHelp(CONF_FALLBACKS3SECRET, "Use this for all S3 accesses, if all your S3 usage is done under the same account"),            
-            new OptHelp(CONF_STALEMILLIS, "When checking backed-up files for staleness, a file this much older than the source is \"stale\"")
+            new OptHelp(CONF_STALEMILLIS, "When checking backed-up files for staleness, a file this much older than the source is \"stale\""),
+            new OptHelp(CONF_BACKUPINVERVAL, "The number of hours to wait between backups if running the BackupService."),
+            new OptHelp(CONF_STALECHECKINVERVAL, "The number of hours to wait between stale checks if running the BackupService."),
+
     };
     
     public static class OptHelp {

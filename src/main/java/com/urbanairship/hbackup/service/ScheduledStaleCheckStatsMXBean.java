@@ -2,9 +2,9 @@ package com.urbanairship.hbackup.service;
 
 
 /**
- * Expose some of the {@link StaleCheckStats} in a jmx bean.
+ * Expose some of the {@link ScheduledStaleCheckStats} in a jmx bean.
  */
-public interface StalecheckStatsMXBean {
+public interface ScheduledStaleCheckStatsMXBean {
 
     public int getNonStaleFiles();
     public int getStaleFiles();

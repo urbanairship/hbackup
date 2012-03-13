@@ -2,11 +2,13 @@ package com.urbanairship.hbackup.service;
 
 
 
+import com.urbanairship.hbackup.StaleCheckStats;
+
 import java.util.Date;
 
-public class StaleCheckStats implements StalecheckStatsMXBean {
+public class ScheduledStaleCheckStats implements ScheduledStaleCheckStatsMXBean {
 
-    private com.urbanairship.hbackup.StaleCheckStats stats = new com.urbanairship.hbackup.StaleCheckStats();
+    private StaleCheckStats stats = new StaleCheckStats();
     private Date date = new Date();
 
     public void setStats(com.urbanairship.hbackup.StaleCheckStats stats) {

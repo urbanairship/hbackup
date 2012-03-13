@@ -3,7 +3,7 @@ package com.urbanairship.hbackup.service.tasks;
 import com.google.common.util.concurrent.AbstractScheduledService;
 import com.urbanairship.hbackup.HBackupConfig;
 import com.urbanairship.hbackup.StalenessCheck;
-import com.urbanairship.hbackup.service.StaleCheckStats;
+import com.urbanairship.hbackup.service.ScheduledStaleCheckStats;
 import com.yammer.metrics.Metrics;
 import com.yammer.metrics.core.Timer;
 import org.apache.log4j.LogManager;
@@ -23,7 +23,7 @@ public class StaleCheckScheduled  extends AbstractScheduledService {
     private static final Logger log = LogManager.getLogger(StaleCheckScheduled.class);
 
     private final HBackupConfig config;
-    private final StaleCheckStats staleCheckStats = new StaleCheckStats();
+    private final ScheduledStaleCheckStats staleCheckStats = new ScheduledStaleCheckStats();
     private final Timer timer = Metrics.newTimer(StalenessCheck.class, "Staleness Check");
 
     public StaleCheckScheduled(HBackupConfig config) {
@@ -31,18 +31,18 @@ public class StaleCheckScheduled  extends AbstractScheduledService {
     }
 
     @Override
-    protected void runOneIteration() throws Exception {
+    protected void runOneIteration() {
         try {
             log.info("Checking staleness.");
-            long start = System.currentTimeMillis();
+            long start = System.nanoTime();
 
             StalenessCheck stalenessCheck = new StalenessCheck(config);
             stalenessCheck.runWithCheckedExceptions();
 
             com.urbanairship.hbackup.StaleCheckStats stats = stalenessCheck.getStats();
             staleCheckStats.setStats(stats);
-            timer.update(System.currentTimeMillis() - start, TimeUnit.MILLISECONDS);
-        } catch (InterruptedException e) {
+            timer.update(System.nanoTime() - start, TimeUnit.NANOSECONDS);
+        } catch (Exception e) {
             log.error("Error checking staleness : ",e);
         }
     }
