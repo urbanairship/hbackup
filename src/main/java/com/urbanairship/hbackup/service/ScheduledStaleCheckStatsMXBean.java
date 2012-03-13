@@ -10,4 +10,5 @@ public interface ScheduledStaleCheckStatsMXBean {
     public int getStaleFiles();
     public int getFailedFiles();
     public String getLastDateRun();
+    public int getSecondsSinceLastUpdate();
 }

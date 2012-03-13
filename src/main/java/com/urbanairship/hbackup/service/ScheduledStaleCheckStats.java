@@ -3,16 +3,18 @@ package com.urbanairship.hbackup.service;
 
 
 import com.urbanairship.hbackup.StaleCheckStats;
+import org.joda.time.DateTime;
+import org.joda.time.Seconds;
 
-import java.util.Date;
 
 public class ScheduledStaleCheckStats implements ScheduledStaleCheckStatsMXBean {
 
     private StaleCheckStats stats = new StaleCheckStats();
-    private Date date = new Date();
+    private DateTime lastRunDate = new DateTime();
 
     public void setStats(com.urbanairship.hbackup.StaleCheckStats stats) {
         this.stats = stats;
+        this.lastRunDate = new DateTime();
     }
 
 
@@ -33,7 +35,13 @@ public class ScheduledStaleCheckStats implements ScheduledStaleCheckStatsMXBean 
 
     @Override
     public String getLastDateRun() {
-        return date.toString();
+        return lastRunDate.toString();
+    }
+
+    @Override
+    public int getSecondsSinceLastUpdate() {
+        Seconds seconds = Seconds.secondsBetween(lastRunDate,new DateTime());
+        return seconds.getSeconds();
     }
 
 

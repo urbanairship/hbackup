@@ -1,8 +1,8 @@
 package com.urbanairship.hbackup.service;
 
 import com.urbanairship.hbackup.Stats;
-
-import java.util.Date;
+import org.joda.time.DateTime;
+import org.joda.time.Seconds;
 
 /**
  */
@@ -10,11 +10,11 @@ public class ScheduledBackupStats implements ScheduledBackupStatsMXBean {
 
     
     private Stats stats = new Stats();
-    private Date date = new Date();
+    private DateTime lastRunDate = new DateTime();
     
     public void setStats(Stats stats) {
         this.stats = stats;
-        this.date = new Date();
+        this.lastRunDate = new DateTime();
     }
 
 
@@ -60,6 +60,12 @@ public class ScheduledBackupStats implements ScheduledBackupStatsMXBean {
 
     @Override
     public String getLastDateRan() {
-        return date.toString();
+        return lastRunDate.toString();
+    }
+
+    @Override
+    public int getSecondsSinceLastUpdate() {
+        Seconds seconds = Seconds.secondsBetween(lastRunDate, new DateTime());
+        return seconds.getSeconds();
     }
 }

@@ -15,4 +15,5 @@ public interface ScheduledBackupStatsMXBean {
     public int getNumChecksumsSucceeded();
     public int getNumChecksumsFailed();
     public String getLastDateRan();
+    public int getSecondsSinceLastUpdate();
 }
