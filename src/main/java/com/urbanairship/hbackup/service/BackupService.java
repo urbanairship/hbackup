@@ -25,7 +25,7 @@ public class BackupService {
         int backupInterval = configuration.backupInterval;
 
         if (backupInterval <= 0) {
-            log.info("Backup interval less than or equal to 0, won't run, please set hbackup.intervalHrs");
+            log.info("Backup interval less than or equal to 0, won't run, please set hbackup.intervalMins");
             System.exit(1);
         }
 

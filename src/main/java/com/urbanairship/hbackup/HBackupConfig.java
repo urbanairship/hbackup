@@ -38,8 +38,8 @@ public class HBackupConfig {
     public static final String CONF_FALLBACKS3ACCESSKEY = "hbackup.s3AccessKey";
     public static final String CONF_FALLBACKS3SECRET = "hbackup.s3Secret";
     public static final String CONF_STALEMILLIS = "hbackup.staleMillis";
-    public static final String CONF_BACKUPINVERVAL = "hbackup.intervalHours";
-    public static final String CONF_STALECHECKINVERVAL = "hbackup.stalecheck.intervalHours";
+    public static final String CONF_BACKUPINVERVAL = "hbackup.intervalMins";
+    public static final String CONF_STALECHECKINVERVAL = "hbackup.stalecheck.intervalMins";
     
     public static final int DEFAULT_CONCURRENT_FILES = 5;
     public static final long DEFAULT_S3_PART_SIZE = 100 * 1024 * 1024;
@@ -330,8 +330,8 @@ public class HBackupConfig {
             new OptHelp(CONF_FALLBACKS3ACCESSKEY, "Use this for all S3 accesses, if all your S3 usage is done under the same account"),
             new OptHelp(CONF_FALLBACKS3SECRET, "Use this for all S3 accesses, if all your S3 usage is done under the same account"),            
             new OptHelp(CONF_STALEMILLIS, "When checking backed-up files for staleness, a file this much older than the source is \"stale\""),
-            new OptHelp(CONF_BACKUPINVERVAL, "The number of hours to wait between backups if running the BackupService."),
-            new OptHelp(CONF_STALECHECKINVERVAL, "The number of hours to wait between stale checks if running the BackupService."),
+            new OptHelp(CONF_BACKUPINVERVAL, "The number of minutes wait between backups if running the BackupService."),
+            new OptHelp(CONF_STALECHECKINVERVAL, "The number of minutes to wait between stale checks if running the BackupService."),
 
     };
     
