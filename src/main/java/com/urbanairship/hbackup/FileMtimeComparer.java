@@ -39,6 +39,7 @@ public class FileMtimeComparer implements Runnable {
         if(sinkMTime == null) {
             stats.failedFiles.incrementAndGet();
             log.error("Failed getting sink mtime for " + relativePath);
+            return;
         }
         log.debug("Got sink mtime " + sinkMTime + " for file " + relativePath);
         
