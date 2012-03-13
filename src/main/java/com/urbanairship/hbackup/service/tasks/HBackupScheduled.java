@@ -73,7 +73,7 @@ public class HBackupScheduled extends AbstractScheduledService {
 
     @Override
     protected Scheduler scheduler() {
-        return Scheduler.newFixedRateSchedule(0, config.backupInterval, TimeUnit.MINUTES);
+        return Scheduler.newFixedRateSchedule(0, config.backupIntervalMinutes, TimeUnit.MINUTES);
     }
 
     public Stats getLastRunStats() {

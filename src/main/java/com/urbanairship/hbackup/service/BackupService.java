@@ -29,10 +29,10 @@ public class BackupService extends AbstractIdleService {
     public static void main(String... args) throws Exception {
 
         HBackupConfig config = HBackupConfig.fromEnv(args);
-        int backupInterval = config.backupInterval;
+        int backupInterval = config.backupIntervalMinutes;
 
         if (backupInterval <= 0) {
-            log.info(String.format("Backup interval less than or equal to 0, won't run, please set %s.",HBackupConfig.CONF_BACKUPINVERVAL));
+            log.info(String.format("Backup interval less than or equal to 0, won't run, please set %s.",HBackupConfig.CONF_BACKUPINTERVAL));
             System.exit(1);
         }
 
@@ -48,7 +48,7 @@ public class BackupService extends AbstractIdleService {
     protected void startUp() throws Exception {
         backupThreadService = new HBackupScheduled(configuration);
         backupThreadService.startAndWait();
-        int staleCheckInterval = configuration.staleCheckInteveral;
+        int staleCheckInterval = configuration.staleCheckIntervalMinutes;
         if (staleCheckInterval > 0) {
             staleCheckScheduled = new StaleCheckScheduled(configuration);
             staleCheckScheduled.startAndWait();

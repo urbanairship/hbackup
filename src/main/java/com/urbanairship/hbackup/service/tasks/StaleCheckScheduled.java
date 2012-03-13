@@ -73,7 +73,7 @@ public class StaleCheckScheduled  extends AbstractScheduledService {
 
     @Override
     protected Scheduler scheduler() {
-        return Scheduler.newFixedRateSchedule(0, config.staleCheckInteveral, TimeUnit.MINUTES);
+        return Scheduler.newFixedRateSchedule(0, config.staleCheckIntervalMinutes, TimeUnit.MINUTES);
     }
     
     public StaleCheckStats getLastRunStats() {
