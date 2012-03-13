@@ -139,9 +139,6 @@ public class HBackup implements Runnable {
         HBackup hBackup = null;
         try {
             HBackupConfig conf = HBackupConfig.fromEnv(args);
-            if(conf.from == null || conf.to == null) {
-                throw new IllegalArgumentException("Source or sink URI was null");
-            }
             hBackup = new HBackup(conf);
         } catch (IllegalArgumentException e) {
             log.error("Invalid configuration", e);

@@ -38,6 +38,8 @@ public class HBackupConfig {
     public static final String CONF_FALLBACKS3ACCESSKEY = "hbackup.s3AccessKey";
     public static final String CONF_FALLBACKS3SECRET = "hbackup.s3Secret";
     public static final String CONF_STALEMILLIS = "hbackup.staleMillis";
+    public static final String CONF_BACKUPINVERVAL = "hbackup.interval";
+    public static final String CONF_STALECHECKINVERVAL = "hbackup.stalecheck.interval";
     
     public static final int DEFAULT_CONCURRENT_FILES = 5;
     public static final long DEFAULT_S3_PART_SIZE = 100 * 1024 * 1024;
@@ -46,7 +48,9 @@ public class HBackupConfig {
     public static final boolean DEFAULT_RECURSIVE = true;
     public static final int DEFAULT_CHUNKRETRIES = 4;
     public static final long DEFAULT_STALEMILLIS = TimeUnit.DAYS.toMillis(1);
-    
+    public static final int DEFAULT_BACKUPINTERVAL= -1;
+    public static final int DEFAULT_STALECHECKINVERVAL = -1;
+
     // Config values
     public final String from;
     public final String to;
@@ -64,6 +68,8 @@ public class HBackupConfig {
     public final String checksumUri;
     public final int numRetries;
     public final long stalenessMillis;
+    public final int backupInterval;
+    public final int staleCheckInteveral;
     
     /**
      * See {@link #optHelps} for an explanation of the parameters.
@@ -73,7 +79,7 @@ public class HBackupConfig {
             long s3PartSize, long s3MultipartThreshold, Configuration hdfsSourceConf, 
             Configuration hdfsSinkConf, boolean mtimeCheck, String includePathsRegex, 
             String checksumUri, int chunkRetries, String checksumS3AccessKey, String checksumS3Secret,
-            String fallbackS3AccessKey, String fallbackS3Secret, long staleMillis) {
+            String fallbackS3AccessKey, String fallbackS3Secret, long staleMillis, int backupInterval, int staleCheckInterval) {
         
         if(s3PartSize < MultipartUtils.MIN_PART_SIZE || s3PartSize > MultipartUtils.MAX_OBJECT_SIZE) {
             throw new IllegalArgumentException("s3PartSize must be within the range " + 
@@ -97,6 +103,8 @@ public class HBackupConfig {
         this.checksumUri = checksumUri;
         this.numRetries = chunkRetries;
         this.stalenessMillis = staleMillis;
+        this.backupInterval = backupInterval;
+        this.staleCheckInteveral = staleCheckInterval;
         
         // The fallback credentials are used whever the config doesn't specify specific credentials
         // for source/sink/checksum. This makes the common case easy, where there is only one set
@@ -152,7 +160,9 @@ public class HBackupConfig {
                 null,
                 null,
                 null,
-                DEFAULT_STALEMILLIS);
+                DEFAULT_STALEMILLIS,
+                DEFAULT_BACKUPINTERVAL,
+                DEFAULT_STALECHECKINVERVAL);
     }
     
     /**
@@ -180,6 +190,8 @@ public class HBackupConfig {
                 s3Secret,
                 null,
                 null,
+                0,
+                0,
                 0);
     }
     
@@ -209,6 +221,8 @@ public class HBackupConfig {
                 s3Secret,
                 null,
                 null,
+                0,
+                0,
                 0);
     }
 
@@ -269,19 +283,19 @@ public class HBackupConfig {
 
         //system props override anything in the files
         conf.addConfiguration(new SystemConfiguration());
-        
-        return new HBackupConfig(conf.getString(CONF_FROM, null), 
-                conf.getString(CONF_TO, null), 
-                conf.getInt(CONF_CONCURRENTCHUNKS, DEFAULT_CONCURRENT_FILES), 
+
+        HBackupConfig config = new HBackupConfig(conf.getString(CONF_FROM, null),
+                conf.getString(CONF_TO, null),
+                conf.getInt(CONF_CONCURRENTCHUNKS, DEFAULT_CONCURRENT_FILES),
                 conf.getBoolean(CONF_RECURSIVE, DEFAULT_RECURSIVE),
-                conf.getString(CONF_SOURCES3ACCESSKEY, null), 
-                conf.getString(CONF_SOURCES3SECRET, null), 
-                conf.getString(CONF_SINKS3ACCESSKEY, null), 
-                conf.getString(CONF_SINKS3SECRET, null), 
+                conf.getString(CONF_SOURCES3ACCESSKEY, null),
+                conf.getString(CONF_SOURCES3SECRET, null),
+                conf.getString(CONF_SINKS3ACCESSKEY, null),
+                conf.getString(CONF_SINKS3SECRET, null),
                 conf.getLong(CONF_S3PARTSIZE, DEFAULT_S3_PART_SIZE),
                 conf.getLong(CONF_S3MULTIPARTTHRESHOLD, DEFAULT_S3_MULTIPART_THRESHOLD),
-                new org.apache.hadoop.conf.Configuration(true),
-                new org.apache.hadoop.conf.Configuration(true),
+                new Configuration(true),
+                new Configuration(true),
                 conf.getBoolean(CONF_MTIMECHECK, DEFAULT_MTIMECHECK),
                 conf.getString(CONF_INCLUDEPATHSREGEX, null),
                 conf.getString(CONF_CHECKSUMURI, null),
@@ -290,7 +304,14 @@ public class HBackupConfig {
                 conf.getString(CONF_CHECKSUMS3SECRET, null),
                 conf.getString(CONF_FALLBACKS3ACCESSKEY, null),
                 conf.getString(CONF_FALLBACKS3SECRET, null),
-                conf.getLong(CONF_STALEMILLIS, DEFAULT_STALEMILLIS));
+                conf.getLong(CONF_STALEMILLIS, DEFAULT_STALEMILLIS),
+                conf.getInt(CONF_BACKUPINVERVAL, DEFAULT_BACKUPINTERVAL),
+                conf.getInt(CONF_STALECHECKINVERVAL, DEFAULT_STALECHECKINVERVAL));
+
+        if(config.from == null || config.to == null) {
+            throw new IllegalArgumentException("Source or sink URI was null");
+        }
+        return config;
     }
     
     final public static OptHelp[] optHelps = new OptHelp[] {
