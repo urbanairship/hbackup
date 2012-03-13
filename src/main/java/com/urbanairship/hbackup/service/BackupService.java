@@ -1,6 +1,7 @@
 package com.urbanairship.hbackup.service;
 
 
+import com.google.common.util.concurrent.AbstractIdleService;
 import com.urbanairship.hbackup.*;
 import com.urbanairship.hbackup.service.tasks.HBackupScheduled;
 import com.urbanairship.hbackup.service.tasks.StaleCheckScheduled;
@@ -15,27 +16,49 @@ import org.apache.log4j.Logger;
  * -Dhbackup.stalecheck.interval=<hour interval>
  *
  */
-public class BackupService {
+public class BackupService extends AbstractIdleService {
 
     private static final Logger log = LogManager.getLogger(BackupService.class);
 
+
+    private final HBackupConfig configuration;
+
+    private HBackupScheduled backupThreadService;
+    private StaleCheckScheduled staleCheckScheduled;
+
     public static void main(String... args) throws Exception {
 
-        final HBackupConfig configuration = HBackupConfig.fromEnv(args);
-        int backupInterval = configuration.backupInterval;
+        HBackupConfig config = HBackupConfig.fromEnv(args);
+        int backupInterval = config.backupInterval;
 
         if (backupInterval <= 0) {
             log.info(String.format("Backup interval less than or equal to 0, won't run, please set %s.",HBackupConfig.CONF_BACKUPINVERVAL));
             System.exit(1);
         }
 
-        HBackupScheduled backupThreadService = new HBackupScheduled(configuration);
-        backupThreadService.startAndWait();
+        BackupService backupService = new BackupService(config);
+        backupService.startAndWait();
+    }
 
+    public BackupService(HBackupConfig configuration) {
+        this.configuration = configuration;
+    }
+
+    @Override
+    protected void startUp() throws Exception {
+        backupThreadService = new HBackupScheduled(configuration);
+        backupThreadService.startAndWait();
         int staleCheckInterval = configuration.staleCheckInteveral;
         if (staleCheckInterval > 0) {
-            StaleCheckScheduled staleCheckScheduled = new StaleCheckScheduled(configuration);
+            staleCheckScheduled = new StaleCheckScheduled(configuration);
             staleCheckScheduled.startAndWait();
         }
     }
+
+    @Override
+    protected void shutDown() throws Exception {
+        backupThreadService.stopAndWait();
+        staleCheckScheduled.stopAndWait();
+    }
+
 }

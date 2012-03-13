@@ -3,9 +3,11 @@ package com.urbanairship.hbackup;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.ArrayDeque;
 import java.util.List;
 
 import com.urbanairship.hbackup.datasinks.HdfsSink;
+import com.urbanairship.hbackup.datasinks.InMemoryDataSink;
 import com.urbanairship.hbackup.datasinks.Jets3tSink;
 
 /**
@@ -26,7 +28,10 @@ public abstract class Sink {
             return new Jets3tSink(uri, conf, stats, checksumService);
         } else if (scheme.equals("hdfs")) {
             return new HdfsSink(uri, conf, stats, checksumService);
-        } else {
+        } else if (scheme.equals("memory")) {
+            return InMemoryDataSink.getInstance();
+        }
+        else {
             throw new IllegalArgumentException("Unknown protocol \"" + scheme + "\" in  URI " + uri);
         }
     }

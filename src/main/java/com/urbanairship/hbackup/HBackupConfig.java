@@ -162,6 +162,38 @@ public class HBackupConfig {
                 0,
                 0);
     }
+
+    /**
+     * Test configuration for use in backup service tests.
+     */
+    public static HBackupConfig forTests(String from, String to, int backupIntervalMinutes,
+                                         int staleCheckIntervalMinutes) {
+        Configuration hdfsConf = new Configuration();
+        SystemConfiguration sysProps = new SystemConfiguration();
+        return new HBackupConfig(from,
+                to,
+                DEFAULT_CONCURRENT_FILES,
+                true,
+                sysProps.getString(CONF_SOURCES3ACCESSKEY),
+                sysProps.getString(CONF_SOURCES3SECRET),
+                sysProps.getString(CONF_SINKS3ACCESSKEY),
+                sysProps.getString(CONF_SINKS3SECRET),
+                DEFAULT_S3_PART_SIZE,
+                DEFAULT_S3_MULTIPART_THRESHOLD,
+                hdfsConf,
+                hdfsConf,
+                true,
+                null,
+                null,
+                0, // Any retries would probably make test failures more confusing
+                null,
+                null,
+                null,
+                null,
+                DEFAULT_STALEMILLIS,
+                backupIntervalMinutes,
+                staleCheckIntervalMinutes);
+    }
     
     /**
      * Get config with defaults for all params except those specified. For testing only.

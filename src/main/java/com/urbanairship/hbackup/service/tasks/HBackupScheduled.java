@@ -3,6 +3,7 @@ package com.urbanairship.hbackup.service.tasks;
 import com.google.common.util.concurrent.AbstractScheduledService;
 import com.urbanairship.hbackup.HBackup;
 import com.urbanairship.hbackup.HBackupConfig;
+import com.urbanairship.hbackup.Stats;
 import com.urbanairship.hbackup.service.ScheduledBackupStats;
 import com.yammer.metrics.Metrics;
 import org.apache.log4j.LogManager;
@@ -10,6 +11,7 @@ import org.apache.log4j.Logger;
 import com.yammer.metrics.core.Timer;
 
 import javax.management.MBeanServer;
+import javax.management.MalformedObjectNameException;
 import javax.management.ObjectName;
 import java.lang.management.ManagementFactory;
 import java.util.concurrent.TimeUnit;
@@ -23,9 +25,20 @@ public class HBackupScheduled extends AbstractScheduledService {
     private final HBackupConfig config;
     private final ScheduledBackupStats backupStatsMBean = new ScheduledBackupStats();
     private final Timer timer = Metrics.newTimer(HBackup.class, "Backup");
+    private final MBeanServer platformMBeanServer = ManagementFactory.getPlatformMBeanServer();
+
+    private Stats lastRunStats = new Stats();
+
+    private ObjectName jmxName;
+
 
     public HBackupScheduled(HBackupConfig config) {
         this.config = config;
+        try {
+            this.jmxName = new ObjectName("com.urbanairship.service:Type=Backup, name=Last Run");
+        } catch (MalformedObjectNameException e) {
+            log.error("Error registering jmx bean : ",e);
+        }
     }
 
 
@@ -38,7 +51,8 @@ public class HBackupScheduled extends AbstractScheduledService {
             HBackup backup = new HBackup(config);
             backup.runWithCheckedExceptions();
 
-            backupStatsMBean.setStats(backup.getStats());
+            lastRunStats = backup.getStats();
+            backupStatsMBean.setStats(lastRunStats);
             timer.update(System.nanoTime() - start, TimeUnit.NANOSECONDS);
         } catch (Exception e) {
             log.error("Error performing backup : ", e);
@@ -48,17 +62,25 @@ public class HBackupScheduled extends AbstractScheduledService {
     @Override
     protected void startUp() throws Exception {
         log.info("Starting up....");
-        MBeanServer platformMBeanServer = ManagementFactory.getPlatformMBeanServer();
-        platformMBeanServer.registerMBean(backupStatsMBean, new ObjectName("com.urbanairship.service:Type=Backup, name=Last Run"));
+        platformMBeanServer.registerMBean(backupStatsMBean, jmxName);
     }
 
     @Override
     protected void shutDown() throws Exception {
+        platformMBeanServer.unregisterMBean(jmxName);
         log.info("Stopped.");
     }
 
     @Override
     protected Scheduler scheduler() {
         return Scheduler.newFixedRateSchedule(0, config.backupInterval, TimeUnit.MINUTES);
+    }
+
+    public Stats getLastRunStats() {
+        return lastRunStats;
+    }
+
+    public Timer getTimerMetric() {
+        return timer;
     }
 }

@@ -2,6 +2,7 @@ package com.urbanairship.hbackup.service.tasks;
 
 import com.google.common.util.concurrent.AbstractScheduledService;
 import com.urbanairship.hbackup.HBackupConfig;
+import com.urbanairship.hbackup.StaleCheckStats;
 import com.urbanairship.hbackup.StalenessCheck;
 import com.urbanairship.hbackup.service.ScheduledStaleCheckStats;
 import com.yammer.metrics.Metrics;
@@ -10,6 +11,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import javax.management.MBeanServer;
+import javax.management.MalformedObjectNameException;
 import javax.management.ObjectName;
 import java.lang.management.ManagementFactory;
 import java.util.concurrent.TimeUnit;
@@ -25,9 +27,19 @@ public class StaleCheckScheduled  extends AbstractScheduledService {
     private final HBackupConfig config;
     private final ScheduledStaleCheckStats staleCheckStats = new ScheduledStaleCheckStats();
     private final Timer timer = Metrics.newTimer(StalenessCheck.class, "Staleness Check");
+    private final MBeanServer platformMBeanServer = ManagementFactory.getPlatformMBeanServer();
+
+    private StaleCheckStats lastRunStats = new StaleCheckStats();
+
+    private ObjectName jmxName;
 
     public StaleCheckScheduled(HBackupConfig config) {
         this.config = config;
+        try {
+            this.jmxName = new ObjectName("com.urbanairship.service:Type=Stale Check, name=Last Run");
+        } catch (MalformedObjectNameException e) {
+            log.error("Error registering jxm bean : ",e);
+        }
     }
 
     @Override
@@ -39,8 +51,8 @@ public class StaleCheckScheduled  extends AbstractScheduledService {
             StalenessCheck stalenessCheck = new StalenessCheck(config);
             stalenessCheck.runWithCheckedExceptions();
 
-            com.urbanairship.hbackup.StaleCheckStats stats = stalenessCheck.getStats();
-            staleCheckStats.setStats(stats);
+            lastRunStats = stalenessCheck.getStats();
+            staleCheckStats.setStats(lastRunStats);
             timer.update(System.nanoTime() - start, TimeUnit.NANOSECONDS);
         } catch (Exception e) {
             log.error("Error checking staleness : ",e);
@@ -50,17 +62,25 @@ public class StaleCheckScheduled  extends AbstractScheduledService {
     @Override
     protected void startUp() throws Exception {
         log.info("Starting up....");
-        MBeanServer platformMBeanServer = ManagementFactory.getPlatformMBeanServer();
-        platformMBeanServer.registerMBean(staleCheckStats, new ObjectName("com.urbanairship.service:Type=Stale Check, name=Last Run"));
+        platformMBeanServer.registerMBean(staleCheckStats, jmxName);
     }
 
     @Override
     protected void shutDown() throws Exception {
+        platformMBeanServer.unregisterMBean(jmxName);
         log.info("Stopped.");
     }
 
     @Override
     protected Scheduler scheduler() {
         return Scheduler.newFixedRateSchedule(0, config.staleCheckInteveral, TimeUnit.MINUTES);
+    }
+    
+    public StaleCheckStats getLastRunStats() {
+        return lastRunStats;
+    }
+    
+    public Timer getTimerMetric() {
+        return timer;
     }
 }
