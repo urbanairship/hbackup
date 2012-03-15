@@ -40,6 +40,7 @@ public class HBackup implements Runnable {
         this.stats = new Stats();
         this.source = Source.forUri(new URI(conf.from), conf);
         this.sink = Sink.forUri(new URI(conf.to), conf, stats);
+        verifyConfiguration(conf);
         if(conf.checksumUri != null) {
             this.checksumService = ChecksumService.forUri(new URI(conf.checksumUri), conf);
         } else {
@@ -139,9 +140,7 @@ public class HBackup implements Runnable {
         HBackup hBackup = null;
         try {
             HBackupConfig conf = HBackupConfig.fromEnv(args);
-            if(conf.from == null || conf.to == null) {
-                throw new IllegalArgumentException("Source or sink URI was null");
-            }
+            verifyConfiguration(conf);
             hBackup = new HBackup(conf);
         } catch (IllegalArgumentException e) {
             log.error("Invalid configuration", e);
@@ -186,5 +185,11 @@ public class HBackup implements Runnable {
         sb.append("Examples:\n");
         sb.append("  CLASSPATH=/mnt/services/tasktracker/etc/:.hbackup-0.9-jar-with-dependencies.jar java -Dhbackup.from=hdfs:///from -Dhbackup.to=hdfs:///to com.urbanairship.hbackup.HBackup ./otherconfigs.properties");
         return sb.toString();
+    }
+
+    private static void verifyConfiguration(HBackupConfig conf) {
+        if(conf.from == null || conf.to == null) {
+            throw new IllegalArgumentException("Source or sink URI was null");
+        }
     }
 }

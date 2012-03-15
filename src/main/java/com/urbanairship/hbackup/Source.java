@@ -6,6 +6,7 @@ import java.net.URISyntaxException;
 import java.util.List;
 
 import com.urbanairship.hbackup.datasources.HdfsSource;
+import com.urbanairship.hbackup.datasources.InMemoryDataSource;
 import com.urbanairship.hbackup.datasources.Jets3tSource;
 
 /**
@@ -21,6 +22,8 @@ public abstract class Source {
             return new Jets3tSource(uri, conf);
         } else if (scheme.equals("hdfs")) {
             return new HdfsSource(uri, conf);
+        } else if (scheme.equals("memory")) {
+           return InMemoryDataSource.getInstance();
         } else {
             throw new IllegalArgumentException("Unknown URI scheme \"" + scheme + "\" in  URI " + uri);
         }
