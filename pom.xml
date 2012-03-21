@@ -4,7 +4,7 @@
 
   <groupId>com.urbanairship</groupId>
   <artifactId>hbackup</artifactId>
-  <version>0.9</version>
+  <version>0.9.1</version>
 
   <name>hbackup</name>
   <url>http://urbanairship.com</url>
@@ -126,8 +126,21 @@
       <artifactId>guava</artifactId>
       <version>11.0.1</version>
     </dependency>
- 
-    <!-- Test Deps -->
+
+    <!-- These deps aren't used by the backup but are needed for RASH to work -->
+    <dependency>
+        <groupId>org.codehaus.jackson</groupId>
+        <artifactId>jackson-core-asl</artifactId>
+        <version>1.6.4</version>
+    </dependency>
+    <dependency>
+        <groupId>org.codehaus.jackson</groupId>
+        <artifactId>jackson-mapper-asl</artifactId>
+        <version>1.6.4</version>
+    </dependency>
+     <!-- End RASH deps -->
+
+      <!-- Test Deps -->
     <dependency>
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
