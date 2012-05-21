@@ -183,7 +183,7 @@ public class HBackup implements Runnable {
                 "the classpath contains a Hadoop configuration pointing to a default filesystem.\n");
         sb.append("\n");
         sb.append("Examples:\n");
-        sb.append("  CLASSPATH=/mnt/services/tasktracker/etc/:.hbackup-0.9-jar-with-dependencies.jar java -Dhbackup.from=hdfs:///from -Dhbackup.to=hdfs:///to com.urbanairship.hbackup.HBackup ./otherconfigs.properties");
+        sb.append("  CLASSPATH=hbackup-0.9-jar-with-dependencies.jar java -Dhbackup.from=hdfs:///from -Dhbackup.to=hdfs:///to com.urbanairship.hbackup.HBackup ./otherconfigs.properties");
         return sb.toString();
     }
 
