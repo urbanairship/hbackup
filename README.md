@@ -8,7 +8,7 @@ HBackup transfers large files between HDFS and S3 and keeps them up to date. Its
   - Transfers multiple chunks of the same file in parallel
   - Bypasses the 5GB file limit to allow very large files
  - Overwrites files in the destination if their size or mtime is different from the source file
- - Uses a custom checksum to verify the integrity of backups in S3 (normal S3 checksums don't work for multipart uploads
+ - Uses a custom checksum to verify the integrity of backups in S3 (normal S3 checksums don't work for multipart uploads)
  - Provides a health check which can verify that all files in the destination are within some delta of the corresponding source file
 
 ## Usage
