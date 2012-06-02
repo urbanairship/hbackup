@@ -1,3 +1,7 @@
+/*
+Copyright 2012 Urban Airship and Contributors
+*/
+
 package com.urbanairship.hbackup;
 
 public class Util {
