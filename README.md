@@ -11,6 +11,9 @@ HBackup transfers large files between HDFS and S3 and keeps them up to date. Its
  - Uses a custom checksum to verify the integrity of backups in S3 (normal S3 checksums don't work for multipart uploads)
  - Provides a health check which can verify that all files in the destination are within some delta of the corresponding source file
 
+Why would I choose this tool instead of Hadoop distcp?
+ - Distcp requires a mapreduce cluster, and the Hadoop S3FileSystem doesn't support uploading files over 5GB since it doesn't use the multipart upload API. Depending on your use case, these factors might be important, but distcp does fine in many cases.
+
 ## Usage
 
 There are three "main" functions in HBackup:
