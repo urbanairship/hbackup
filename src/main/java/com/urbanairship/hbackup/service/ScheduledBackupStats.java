@@ -1,3 +1,7 @@
+/*
+Copyright 2012 Urban Airship and Contributors
+*/
+
 package com.urbanairship.hbackup.service;
 
 import com.urbanairship.hbackup.Stats;

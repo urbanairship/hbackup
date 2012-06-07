@@ -1,3 +1,7 @@
+/*
+Copyright 2012 Urban Airship and Contributors
+*/
+
 package com.urbanairship.hbackup;
 import org.jets3t.service.model.S3Object;
 import org.junit.After;
