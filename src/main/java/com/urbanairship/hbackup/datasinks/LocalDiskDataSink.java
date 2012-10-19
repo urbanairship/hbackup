@@ -46,16 +46,26 @@ public class LocalDiskDataSink extends Sink {
        return ImmutableList.<RetryableChunk>of(new RetryableChunk() {
 
            OutputStream outputStream = null;
+
            @Override
            public StreamingXor run() throws IOException {
-               InputStream is = file.getFullInputStream();
-               XorInputStream xis = new XorInputStream(is, 0);
-               outputStream = FileUtils.openOutputStream(new File(baseName + file.getRelativePath()));
-               IOUtils.copyLarge(xis, outputStream);
-               is.close();
-               outputStream.close();
-               fileSystem.add(file);
-               return xis.getStreamingXor();
+               InputStream is = null;
+               try {
+                   is = file.getFullInputStream();
+                   XorInputStream xis = new XorInputStream(is, 0);
+                   outputStream = FileUtils.openOutputStream(new File(baseName + file.getRelativePath()));
+                   IOUtils.copyLarge(xis, outputStream);
+                   is.close();
+                   fileSystem.add(file);
+                   return xis.getStreamingXor();
+               } finally {
+                   if (outputStream != null) {
+                       outputStream.close();
+                   }
+                   if (is != null){
+                       is.close();
+                   }
+               }
            }
 
            @Override
