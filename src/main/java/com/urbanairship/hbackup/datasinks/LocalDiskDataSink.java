@@ -8,21 +8,20 @@ import com.google.common.collect.ImmutableList;
 import com.urbanairship.hbackup.*;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 
-import java.io.*;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.URI;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * Local File system data sink used for testing. The class is a singleton that will hold {@link com.urbanairship.hbackup.SourceFile}s in memory.
+ * Local File system data sink.
  */
 public class LocalDiskDataSink extends Sink {
-
-    private static final Logger log = LogManager.getLogger(LocalDiskDataSink.class);
 
     private final Collection<SourceFile> fileSystem;
     private String baseName;
@@ -31,10 +30,6 @@ public class LocalDiskDataSink extends Sink {
     public LocalDiskDataSink(URI uri, HBackupConfig conf, Stats stats, ChecksumService checksumService) {
         this.fileSystem = new CopyOnWriteArrayList<SourceFile>();
         this.baseName = Util.canonicalizeBaseName(uri.getPath());
-    }
-
-    public Collection<SourceFile> getFileSystem() {
-        return fileSystem;
     }
 
     @Override
