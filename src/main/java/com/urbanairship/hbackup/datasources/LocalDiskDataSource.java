@@ -16,7 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * In memory data source used for testing. The class is a singleton that will hold {@link com.urbanairship.hbackup.SourceFile}s in memory.
+ * Local Filesystem data source.
  */
 public class LocalDiskDataSource extends Source {
 

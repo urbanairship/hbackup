@@ -17,7 +17,7 @@ import java.net.URI;
 import java.util.List;
 
 /**
- * Local File system data sink.
+ * Local Filesystem data sink.
  */
 public class LocalDiskDataSink extends Sink {
 
