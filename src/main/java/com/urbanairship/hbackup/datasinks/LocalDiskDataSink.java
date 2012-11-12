@@ -14,21 +14,19 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
-import java.util.Collection;
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Local File system data sink.
  */
 public class LocalDiskDataSink extends Sink {
 
-    private final Collection<SourceFile> fileSystem;
     private String baseName;
+    private File file;
 
 
     public LocalDiskDataSink(URI uri, HBackupConfig conf, Stats stats, ChecksumService checksumService) {
-        this.fileSystem = new CopyOnWriteArrayList<SourceFile>();
+        this.file = new File(uri);
         this.baseName = Util.canonicalizeBaseName(uri.getPath());
     }
 
@@ -51,12 +49,16 @@ public class LocalDiskDataSink extends Sink {
            public StreamingXor run() throws IOException {
                InputStream is = null;
                try {
+                   long size = file.getLength();
+                   if(size == 0){
+                       ensureFileExists(file);
+                   }
                    is = file.getFullInputStream();
                    XorInputStream xis = new XorInputStream(is, 0);
-                   outputStream = FileUtils.openOutputStream(new File(baseName + file.getRelativePath()));
+                   outputStream = FileUtils.openOutputStream(getLocalFile(file));
                    IOUtils.copyLarge(xis, outputStream);
                    is.close();
-                   fileSystem.add(file);
+                   System.out.println(String.format("Copied: %s, size %d", file.getRelativePath(), size));
                    return xis.getStreamingXor();
                } finally {
                    if (outputStream != null) {
@@ -70,8 +72,21 @@ public class LocalDiskDataSink extends Sink {
 
            @Override
            public void commitAllChunks() throws IOException {
+               getLocalFile(file).setLastModified(file.getMTime());
            }
        });
+    }
+
+    private void ensureFileExists(SourceFile file) throws IOException {
+        File localFile = getLocalFile(file);
+        if(!localFile.getParentFile().exists()){
+            localFile.getParentFile().mkdirs();
+        }
+        localFile.createNewFile();
+    }
+
+    private File getLocalFile(SourceFile file) {
+        return new File(URI.create("file:/" + baseName + file.getRelativePath()));
     }
 
     @Override
@@ -83,14 +98,8 @@ public class LocalDiskDataSink extends Sink {
 
         return sourceFile.getMTime();
     }
-    
-    private SourceFile getSourceFile(String relativePath) {
 
-        for (SourceFile sourceFile : fileSystem) {
-            if (sourceFile.getRelativePath().equals(relativePath)) {
-                return sourceFile;
-            }
-        }
-        return null;
+    private SourceFile getSourceFile(String relativePath) {
+        return new LocalSourceFile(new File(file, relativePath), file.getAbsolutePath());
     }
 }
