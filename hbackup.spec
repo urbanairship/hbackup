@@ -27,7 +27,8 @@ Group:          Development/Libraries \
 /mnt/services/%1/
 
 %service_macro reports-backup
-%service_macro hbackup-reports # The new mapr backup service
+# The new mapr backup service
+%service_macro hbackup-reports
 
 %prep
 %setup -q
