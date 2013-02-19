@@ -14,6 +14,22 @@ Requires:       jre rash
 Basic RPM for UA-style services
 
 
+%define service_macro()               \
+%package -n %1                        \
+Summary:        %1 package            \
+AutoReqProv:    no                    \
+Requires:       jre                   \
+Group:          Development/Libraries \
+%description -n %1                    \
+%{name}-%1 UA Service                 \
+%files -n %1                          \
+%defattr(-,root,root)                 \
+/mnt/services/%1/
+
+%service_macro reports-backup
+# The new mapr backup service
+%service_macro hbackup-reports
+
 %prep
 %setup -q
 
@@ -23,17 +39,16 @@ mvn -DskipTests install
 
 
 %install
-rm -rf $RPM_BUILD_ROOT
-mkdir -p $RPM_BUILD_ROOT/mnt/services/reports-backup/rpm/lib/java
-cp target/%{name}-*.jar $RPM_BUILD_ROOT/mnt/services/reports-backup/rpm/lib/java/
-ln -s rpm $RPM_BUILD_ROOT/mnt/services/reports-backup/current
+rm -rf %{buildroot}
 
+
+%define install_macro() \
+mkdir -p %{buildroot}/mnt/services/%1/rpm/lib/java \
+cp target/*.jar %{buildroot}/mnt/services/%1/rpm/lib/java/ \
+ln -s -T rpm %{buildroot}/mnt/services/%1/current
+
+%install_macro reports-backup
+%install_macro hbackup-reports
 
 %clean
 rm -rf $RPM_BUILD_ROOT
-
-
-%files
-%defattr(-,root,root)
-/mnt/services/reports-backup/rpm/lib/java/*.jar
-/mnt/services/reports-backup/current
