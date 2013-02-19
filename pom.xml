@@ -8,6 +8,10 @@
 
   <name>hbackup</name>
   <url>http://urbanairship.com</url>
+  <scm>
+    <connection>scm:git:git@github.com:urbanairship/hbackup.git</connection>
+  </scm>
+
 
   <build>
     <plugins>
@@ -143,11 +147,6 @@
       <groupId>joda-time</groupId>
       <artifactId>joda-time</artifactId>
       <version>1.6.2</version>
-    </dependency>
-    <dependency>
-      <groupId>org.codehaus.jackson</groupId>
-      <artifactId>jackson-mapper-asl</artifactId>
-      <version>1.6.4</version>
     </dependency>
    <dependency>
       <groupId>org.apache.hadoop</groupId>
