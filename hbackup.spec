@@ -15,14 +15,14 @@ Basic RPM for UA-style services
 
 
 %define service_macro()               \
-%package %1                           \
-Summary:        %{name}-%1 package    \
+%package -n %1                        \
+Summary:        %1 package            \
 AutoReqProv:    no                    \
 Requires:       jre                   \
 Group:          Development/Libraries \
-%description %1                       \
+%description -n %1                    \
 %{name}-%1 UA Service                 \
-%files %1                             \
+%files -n %1                          \
 %defattr(-,root,root)                 \
 /mnt/services/%1/
 
