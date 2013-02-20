@@ -19,6 +19,7 @@ import javax.management.MalformedObjectNameException;
 import javax.management.ObjectName;
 import java.lang.management.ManagementFactory;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Class to run the staleness check on a configured interval. Just instantiates the object and runs it, exposes
@@ -32,6 +33,7 @@ public class StaleCheckScheduled  extends AbstractScheduledService {
     private final ScheduledStaleCheckStats staleCheckStats = new ScheduledStaleCheckStats();
     private final Timer timer = Metrics.newTimer(StalenessCheck.class, "Staleness Check");
     private final MBeanServer platformMBeanServer = ManagementFactory.getPlatformMBeanServer();
+    private final AtomicBoolean checking = new AtomicBoolean(false);
 
     private StaleCheckStats lastRunStats = new StaleCheckStats();
 
@@ -49,6 +51,10 @@ public class StaleCheckScheduled  extends AbstractScheduledService {
     @Override
     protected void runOneIteration() {
         try {
+            if (!checking.compareAndSet(false, true)) {
+                throw new RuntimeException("Staleness check already in progress");
+            }
+
             log.info("Checking staleness.");
             long start = System.nanoTime();
 
@@ -60,6 +66,9 @@ public class StaleCheckScheduled  extends AbstractScheduledService {
             timer.update(System.nanoTime() - start, TimeUnit.NANOSECONDS);
         } catch (Exception e) {
             log.error("Error checking staleness : ",e);
+        } finally {
+            // If we didn't set here, the exception above was thrown when attempting to set checking to true.
+            checking.compareAndSet(true, false);
         }
     }
 
@@ -71,6 +80,10 @@ public class StaleCheckScheduled  extends AbstractScheduledService {
 
     @Override
     protected void shutDown() throws Exception {
+        log.info("Waiting for check thread to exit");
+        while (checking.get()) {
+            Thread.sleep(1000);
+        }
         platformMBeanServer.unregisterMBean(jmxName);
         log.info("Stopped.");
     }
