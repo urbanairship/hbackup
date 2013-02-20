@@ -63,6 +63,7 @@ public class BackupServiceTest {
 
         assertEquals(1,hBackupScheduled.getTimerMetric().count());
         assertTrue(hBackupScheduled.getTimerMetric().mean() > 0.0);
+        clearMemoryFS();
     }
 
     @Test
@@ -95,6 +96,7 @@ public class BackupServiceTest {
         assertEquals(0, lastRunStats.failedFiles.get());
 
         assertNotSame(1, staleCheckScheduled.getTimerMetric().count());
+        clearMemoryFS();
 
     }
 
@@ -119,6 +121,7 @@ public class BackupServiceTest {
 
         StaleCheckScheduled staleCheckScheduled = new StaleCheckScheduled(config);
         staleCheckScheduled.startAndWait();
+        Thread.sleep(1);
         staleCheckScheduled.stopAndWait();
 
         StaleCheckStats lastRunStats = staleCheckScheduled.getLastRunStats();
@@ -128,7 +131,7 @@ public class BackupServiceTest {
         assertEquals(0, lastRunStats.failedFiles.get());
 
         assertNotSame(0, staleCheckScheduled.getTimerMetric().count());
-
+        clearMemoryFS();
     }
 
     private void addTestFile(Collection<SourceFile> memoryFileSystem, final String path, final int length, final long time) {
