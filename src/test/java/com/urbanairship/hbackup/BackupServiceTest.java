@@ -121,7 +121,7 @@ public class BackupServiceTest {
 
         StaleCheckScheduled staleCheckScheduled = new StaleCheckScheduled(config);
         staleCheckScheduled.startAndWait();
-        Thread.sleep(1);
+        Thread.sleep(1000);
         staleCheckScheduled.stopAndWait();
 
         StaleCheckStats lastRunStats = staleCheckScheduled.getLastRunStats();
