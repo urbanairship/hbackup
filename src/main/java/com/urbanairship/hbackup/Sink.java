@@ -30,7 +30,7 @@ public abstract class Sink {
 
         if(scheme.equals("s3")) {
             return new Jets3tSink(uri, conf, stats, checksumService);
-        } else if (scheme.equals("hdfs")) {
+        } else if (scheme.equals("hdfs") || scheme.equals("maprfs")) {
             return new HdfsSink(uri, conf, stats, checksumService);
         } else if (scheme.equals("memory")) {
             return InMemoryDataSink.getInstance();
