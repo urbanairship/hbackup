@@ -24,7 +24,7 @@ public abstract class Source {
         
         if (scheme.equals("s3")) {
             return new Jets3tSource(uri, conf);
-        } else if (scheme.equals("hdfs")) {
+        } else if (scheme.equals("hdfs") || scheme.equals("maprfs")) {
             return new HdfsSource(uri, conf);
         } else if (scheme.equals("memory")) {
            return InMemoryDataSource.getInstance();
