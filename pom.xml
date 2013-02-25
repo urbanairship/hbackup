@@ -3,7 +3,7 @@
 
   <groupId>com.urbanairship</groupId>
   <artifactId>hbackup</artifactId>
-  <version>0.9.4-SNAPSHOT</version>
+  <version>0.9.4</version>
 
   <name>hbackup</name>
   <url>http://urbanairship.com</url>
