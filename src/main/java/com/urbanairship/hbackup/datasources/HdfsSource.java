@@ -15,8 +15,6 @@ import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hdfs.DistributedFileSystem;
-import org.apache.hadoop.hdfs.protocol.LocatedBlocks;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -27,18 +25,16 @@ import com.urbanairship.hbackup.SourceFile;
 
 public class HdfsSource extends Source {
     private static final Logger log = LogManager.getLogger(HdfsSource.class);
-    private final DistributedFileSystem dfs;
+    private final FileSystem fs;
     private final URI baseUri;
-    
+    private final long mtimeAgeMillis;
+
     public HdfsSource(URI sourceUri, HBackupConfig conf) 
             throws IOException, URISyntaxException {
         this.baseUri = sourceUri;
         org.apache.hadoop.conf.Configuration hadoopConf = conf.hdfsSourceConf;
-        FileSystem fs = FileSystem.get(baseUri, hadoopConf);
-        if(!(fs instanceof DistributedFileSystem)) {
-            throw new RuntimeException("Hadoop FileSystem instance for URI was not an HDFS DistributedFileSystem");
-        }
-        dfs = (DistributedFileSystem)fs;
+        this.fs = FileSystem.get(baseUri, hadoopConf);
+        this.mtimeAgeMillis = conf.mtimeAgeMillis;
     }
 
     @Override
@@ -49,7 +45,7 @@ public class HdfsSource extends Source {
     }
     
     private void addFiles(List<SourceFile> files, Path path, boolean recursive, String relativeTo) throws IOException {
-        FileStatus[] listing = dfs.listStatus(path);
+        FileStatus[] listing = fs.listStatus(path);
         
         if(listing == null) {
             return;
@@ -62,12 +58,10 @@ public class HdfsSource extends Source {
             } else { // stat isn't a directory, so it's a file
                 String filename = stat.getPath().toUri().getPath(); // Looks like /dir/dir/filename
                 long fileLength = stat.getLen();
-                
-                LocatedBlocks fileBlocks = dfs.getClient().namenode.getBlockLocations(filename, 0, fileLength);
-                if(fileBlocks.isUnderConstruction()) { 
-                    log.debug("Skipping file under construction: " + filename);
+                if(System.currentTimeMillis() - stat.getModificationTime() >= mtimeAgeMillis) {
+                    log.debug("Skipping file under minimum mtime: " + filename);
                 } else {
-                    files.add(new HdfsFile(stat, dfs, relativeTo + stat.getPath().getName()));
+                    files.add(new HdfsFile(stat, fs, relativeTo + stat.getPath().getName()));
                 }
             }
         }
@@ -78,24 +72,24 @@ public class HdfsSource extends Source {
      */
     private class HdfsFile implements SourceFile {
         private final FileStatus stat;
-        private final DistributedFileSystem dfs;
+        private final FileSystem fs;
         private final String relativePath;
         
-        public HdfsFile(FileStatus stat, DistributedFileSystem dfs, String relativePath) {
+        public HdfsFile(FileStatus stat, FileSystem fs, String relativePath) {
             this.stat = stat;
-            this.dfs = dfs;
+            this.fs = fs;
             this.relativePath = relativePath;
             assert !relativePath.startsWith("/");
         }
         
         @Override
         public InputStream getFullInputStream() throws IOException {
-            return dfs.open(stat.getPath());
+            return fs.open(stat.getPath());
         }
         
         @Override
         public InputStream getPartialInputStream(long offset, long len) throws IOException {
-            FSDataInputStream is = dfs.open(stat.getPath());
+            FSDataInputStream is = fs.open(stat.getPath());
             is.seek(offset);
             return new LimitInputStream(is, len);
         }
