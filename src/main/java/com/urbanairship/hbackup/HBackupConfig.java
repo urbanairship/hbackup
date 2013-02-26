@@ -44,7 +44,9 @@ public class HBackupConfig {
     public static final String CONF_STALEMILLIS = "hbackup.staleMillis";
     public static final String CONF_BACKUPINTERVAL = "hbackup.intervalMins";
     public static final String CONF_STALECHECKINTERVAL = "hbackup.stalecheck.intervalMins";
-    
+    public static final String CONF_MINIMUMMTIME = "hbackup.minimum.mtime";
+
+
     public static final int DEFAULT_CONCURRENT_FILES = 5;
     public static final long DEFAULT_S3_PART_SIZE = 100 * 1024 * 1024;
     public static final int DEFAULT_S3_MULTIPART_THRESHOLD = 100 * 1024 * 1024;
@@ -52,6 +54,7 @@ public class HBackupConfig {
     public static final boolean DEFAULT_RECURSIVE = true;
     public static final int DEFAULT_CHUNKRETRIES = 4;
     public static final long DEFAULT_STALEMILLIS = TimeUnit.DAYS.toMillis(1);
+    public static final long DEFAULT_MINIMUM_MTIME = TimeUnit.DAYS.toMillis(1);
 
     // Config values
     public final String from;
@@ -72,7 +75,8 @@ public class HBackupConfig {
     public final long stalenessMillis;
     public final int backupIntervalMinutes;
     public final int staleCheckIntervalMinutes;
-    
+    public final long minimumMtime;
+
     /**
      * See {@link #optHelps} for an explanation of the parameters.
      */
@@ -81,7 +85,8 @@ public class HBackupConfig {
             long s3PartSize, long s3MultipartThreshold, Configuration hdfsSourceConf, 
             Configuration hdfsSinkConf, boolean mtimeCheck, String includePathsRegex, 
             String checksumUri, int chunkRetries, String checksumS3AccessKey, String checksumS3Secret,
-            String fallbackS3AccessKey, String fallbackS3Secret, long staleMillis, int backupIntervalMinutes, int staleCheckIntervalMinutes) {
+            String fallbackS3AccessKey, String fallbackS3Secret, long staleMillis, int backupIntervalMinutes,
+            int staleCheckIntervalMinutes, long minimumMtime) {
         
         if(s3PartSize < MultipartUtils.MIN_PART_SIZE || s3PartSize > MultipartUtils.MAX_OBJECT_SIZE) {
             throw new IllegalArgumentException("s3PartSize must be within the range " + 
@@ -107,7 +112,8 @@ public class HBackupConfig {
         this.stalenessMillis = staleMillis;
         this.backupIntervalMinutes = backupIntervalMinutes;
         this.staleCheckIntervalMinutes = staleCheckIntervalMinutes;
-        
+        this.minimumMtime = minimumMtime;
+
         // The fallback credentials are used whever the config doesn't specify specific credentials
         // for source/sink/checksum. This makes the common case easy, where there is only one set
         // of credentials used for all three things.
@@ -164,7 +170,8 @@ public class HBackupConfig {
                 null,
                 DEFAULT_STALEMILLIS,
                 0,
-                0);
+                0,
+                DEFAULT_MINIMUM_MTIME);
     }
 
     /**
@@ -196,7 +203,8 @@ public class HBackupConfig {
                 null,
                 DEFAULT_STALEMILLIS,
                 backupIntervalMinutes,
-                staleCheckIntervalMinutes);
+                staleCheckIntervalMinutes,
+                DEFAULT_MINIMUM_MTIME);
     }
     
     /**
@@ -226,7 +234,8 @@ public class HBackupConfig {
                 null,
                 0,
                 0,
-                0);
+                0,
+                DEFAULT_MINIMUM_MTIME);
     }
     
     /**
@@ -257,7 +266,8 @@ public class HBackupConfig {
                 null,
                 0,
                 0,
-                0);
+                0,
+                DEFAULT_MINIMUM_MTIME);
     }
 
     /**
@@ -340,7 +350,8 @@ public class HBackupConfig {
                 conf.getString(CONF_FALLBACKS3SECRET, null),
                 conf.getLong(CONF_STALEMILLIS, DEFAULT_STALEMILLIS),
                 conf.getInt(CONF_BACKUPINTERVAL, 0),
-                conf.getInt(CONF_STALECHECKINTERVAL, 0));
+                conf.getInt(CONF_STALECHECKINTERVAL, 0),
+               conf.getLong(CONF_MINIMUMMTIME, DEFAULT_MINIMUM_MTIME));
 
     }
     
@@ -370,6 +381,9 @@ public class HBackupConfig {
                     " it will start immediately after the previous run."),
             new OptHelp(CONF_STALECHECKINTERVAL, "Determines how often the stale check will be run. If the check can't complete during the interval" +
                     " it will start immediately after the previous run."),
+            new OptHelp(CONF_MINIMUMMTIME, "The minimum mtime differential between the current " +
+                    "system time and a file to be backed up. A file with a differential greater " +
+                    "than or equal to this will be backedup.")
     };
     
     public static class OptHelp {

@@ -33,7 +33,7 @@ import com.urbanairship.hbackup.XorInputStream;
 public class HdfsSink extends Sink {
     private static final Logger log = LogManager.getLogger(HdfsSink.class);
     private final String baseName;
-    private final DistributedFileSystem dfs;
+    private final FileSystem fs;
     private final HBackupConfig conf;
     
     public HdfsSink(URI uri, HBackupConfig conf, Stats stats, ChecksumService checksumService) throws IOException, URISyntaxException {
@@ -47,18 +47,14 @@ public class HdfsSink extends Sink {
         this.baseName = tempBaseName;
         this.conf = conf;
         org.apache.hadoop.conf.Configuration hadoopConf = conf.hdfsSinkConf;
-        FileSystem fs = FileSystem.get(uri, hadoopConf);
-        if(!(fs instanceof DistributedFileSystem)) {
-            throw new RuntimeException("Hadoop FileSystem instance for URI was not an HDFS DistributedFileSystem");
-        }
-        dfs = (DistributedFileSystem)fs;
+        this.fs = FileSystem.get(uri, hadoopConf);
     }
     
     @Override
     public boolean existsAndUpToDate(SourceFile sourceFile) throws IOException {
         Path path = new Path(baseName + sourceFile.getRelativePath());
         try {
-            FileStatus targetStat = dfs.getFileStatus(path);
+            FileStatus targetStat = fs.getFileStatus(path);
             if (sourceFile.getLength() != targetStat.getLen()) {
                 log.debug("Different length in source and sink, will re-upload: " + sourceFile.getRelativePath());
                 return false;
@@ -90,7 +86,7 @@ public class HdfsSink extends Sink {
     @Override
     public Long getMTime(String relativePath) throws IOException {
         try {
-            FileStatus stat = dfs.getFileStatus(new Path(baseName + relativePath));
+            FileStatus stat = fs.getFileStatus(new Path(baseName + relativePath));
             return stat.getModificationTime();
         } catch (FileNotFoundException e) {
             return null;
@@ -115,13 +111,13 @@ public class HdfsSink extends Sink {
                     Path destPath = new Path(baseName + relativePath);
                     is = sourceFile.getFullInputStream();
                     XorInputStream xis = new XorInputStream(is, 0);
-                    os = dfs.create(destPath);
+                    os = fs.create(destPath);
                     IOUtils.copyLarge(xis, os);
                     is.close();
                     os.close();
                     
                     // Set the atime and mtime of the sink file equal to the mtime of the source file.
-                    dfs.setTimes(destPath, sourceFile.getMTime(), sourceFile.getMTime());
+                    fs.setTimes(destPath, sourceFile.getMTime(), sourceFile.getMTime());
 
                     log.debug("Done transferring file to HDFS: " + relativePath);
                     
