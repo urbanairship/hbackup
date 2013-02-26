@@ -154,7 +154,7 @@ public class HdfsTest {
                 0,
                 0,
                 0,
-                HBackupConfig.DEFAULT_MINIMUM_MTIMEMILLIS);
+                HBackupConfig.DEFAULT_MTIME_AGE_MILLIS);
         HBackup hbackup = new HBackup(conf);
         hbackup.runWithCheckedExceptions();
         Assert.assertEquals(1, hbackup.getStats().numFilesSucceeded.get());
