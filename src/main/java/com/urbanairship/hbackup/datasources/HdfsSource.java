@@ -27,14 +27,14 @@ public class HdfsSource extends Source {
     private static final Logger log = LogManager.getLogger(HdfsSource.class);
     private final FileSystem fs;
     private final URI baseUri;
-    private final long minimumMtime;
+    private final long minimumMtimeMillis;
 
     public HdfsSource(URI sourceUri, HBackupConfig conf) 
             throws IOException, URISyntaxException {
         this.baseUri = sourceUri;
         org.apache.hadoop.conf.Configuration hadoopConf = conf.hdfsSourceConf;
         this.fs = FileSystem.get(baseUri, hadoopConf);
-        this.minimumMtime = conf.minimumMtime;
+        this.minimumMtimeMillis = conf.minimumMtimeMillis;
     }
 
     @Override
@@ -58,7 +58,7 @@ public class HdfsSource extends Source {
             } else { // stat isn't a directory, so it's a file
                 String filename = stat.getPath().toUri().getPath(); // Looks like /dir/dir/filename
                 long fileLength = stat.getLen();
-                if(System.currentTimeMillis() - stat.getModificationTime() >= minimumMtime) {
+                if(System.currentTimeMillis() - stat.getModificationTime() >= minimumMtimeMillis) {
                     log.debug("Skipping file under minimum mtime: " + filename);
                 } else {
                     files.add(new HdfsFile(stat, fs, relativeTo + stat.getPath().getName()));

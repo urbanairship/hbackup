@@ -13,7 +13,7 @@ HBackup transfers large files between HDFS and S3 and keeps them up to date. Its
 
 Why would I choose this tool instead of Hadoop distcp?
 
-- Distcp requires a mapr educe cluster, and the Hadoop S3FileSystem doesn't
+- Distcp requires a mapreduce cluster, and the Hadoop S3FileSystem doesn't
   support uploading files over 5GB since it doesn't use the multipart upload
   API. Depending on your use case, these factors might be important, but distcp
   does fine in many cases.
@@ -24,7 +24,7 @@ There are three "main" functions in HBackup:
 
  - The main backup tool, run com.urbanairship.hbackup.HBackup. This will do a
    backup according to the configuration. It will only backup files with a
-   differential greater than or equal to `hbackup.minimumMtime`.
+   differential greater than or equal to `hbackup.minimumMtimeMillis`.
 
  - The S3 in-place checksum verification tool, run
    com.urbanairship.hbackup.checksumverify.ChecksumVerify. This will compute
@@ -85,7 +85,7 @@ All options can be seen by running com.urbanairship.hbackup.HBackup with --usage
      hbackup.s3AccessKey             Use this for all S3 accesses, if all your S3 usage is done under the same account
      hbackup.s3Secret                Use this for all S3 accesses, if all your S3 usage is done under the same account
      hbackup.staleMillis             When checking backed-up files for staleness, a file this much older than the source is "stale"
-     hbackup.minimumMtime            When checking source up files for inclusion, a file this much older than the current systemTime will be backed up.
+     hbackup.minimumMtimeMillis      When checking source up files for inclusion, a file this much older than the current systemTime will be backed up.
     
     When specifying HDFS URIs, you can leave the host part blank
     (hdfs://dir/file.txt instead of hdfs://host:port/dir/file.txt) if the
