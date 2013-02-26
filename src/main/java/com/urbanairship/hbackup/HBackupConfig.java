@@ -170,7 +170,7 @@ public class HBackupConfig {
                 DEFAULT_STALEMILLIS,
                 0,
                 0,
-                DEFAULT_MTIME_AGE_MILLIS);
+                0);
     }
 
     /**
@@ -203,7 +203,7 @@ public class HBackupConfig {
                 DEFAULT_STALEMILLIS,
                 backupIntervalMinutes,
                 staleCheckIntervalMinutes,
-                DEFAULT_MTIME_AGE_MILLIS);
+                0);
     }
     
     /**
@@ -234,7 +234,7 @@ public class HBackupConfig {
                 0,
                 0,
                 0,
-                DEFAULT_MTIME_AGE_MILLIS);
+                0);
     }
     
     /**
@@ -266,7 +266,7 @@ public class HBackupConfig {
                 0,
                 0,
                 0,
-                DEFAULT_MTIME_AGE_MILLIS);
+                0);
     }
 
     /**
