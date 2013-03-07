@@ -12,7 +12,7 @@ import com.urbanairship.hbackup.service.ScheduledBackupStats;
 import com.yammer.metrics.Metrics;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import com.yammer.metrics.core.Timer;
+import com.yammer.metrics.core.TimerMetric;
 
 import javax.management.MBeanServer;
 import javax.management.MalformedObjectNameException;
@@ -28,7 +28,7 @@ public class HBackupScheduled extends AbstractScheduledService {
     
     private final HBackupConfig config;
     private final ScheduledBackupStats backupStatsMBean = new ScheduledBackupStats();
-    private final Timer timer = Metrics.newTimer(HBackup.class, "Backup");
+    private final TimerMetric timer = Metrics.newTimer(HBackup.class, "Backup");
     private final MBeanServer platformMBeanServer = ManagementFactory.getPlatformMBeanServer();
 
     private Stats lastRunStats = new Stats();
@@ -84,7 +84,7 @@ public class HBackupScheduled extends AbstractScheduledService {
         return lastRunStats;
     }
 
-    public Timer getTimerMetric() {
+    public TimerMetric getTimerMetric() {
         return timer;
     }
 }

@@ -10,7 +10,7 @@ import com.urbanairship.hbackup.StaleCheckStats;
 import com.urbanairship.hbackup.StalenessCheck;
 import com.urbanairship.hbackup.service.ScheduledStaleCheckStats;
 import com.yammer.metrics.Metrics;
-import com.yammer.metrics.core.Timer;
+import com.yammer.metrics.core.TimerMetric;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -31,7 +31,7 @@ public class StaleCheckScheduled  extends AbstractScheduledService {
 
     private final HBackupConfig config;
     private final ScheduledStaleCheckStats staleCheckStats = new ScheduledStaleCheckStats();
-    private final Timer timer = Metrics.newTimer(StalenessCheck.class, "Staleness Check");
+    private final TimerMetric timer = Metrics.newTimer(StalenessCheck.class, "Staleness Check");
     private final MBeanServer platformMBeanServer = ManagementFactory.getPlatformMBeanServer();
     private final AtomicBoolean checking = new AtomicBoolean(false);
 
@@ -97,7 +97,7 @@ public class StaleCheckScheduled  extends AbstractScheduledService {
         return lastRunStats;
     }
     
-    public Timer getTimerMetric() {
+    public TimerMetric getTimerMetric() {
         return timer;
     }
 }
