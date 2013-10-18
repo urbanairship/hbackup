@@ -5,6 +5,7 @@ Copyright 2012 Urban Airship and Contributors
 package com.urbanairship.hbackup;
 
 import java.io.File;
+import java.io.OutputStream;
 
 import junit.framework.Assert;
 
@@ -12,12 +13,11 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
+import org.apache.hadoop.ipc.RemoteException;
 import org.jets3t.service.utils.MultipartUtils;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
-import org.junit.Test;
+import org.junit.*;
 
 public class HdfsTest {
     private static MiniDFSCluster srcCluster;
@@ -30,7 +30,7 @@ public class HdfsTest {
         // We have to specify the MiniDFSClusters' directories manually, otherwise both clusters 
         // will try to use the hardcoded defaults and collide with each other.
         // This code is partly based on some of the code in MiniDFSCluster.java.
-        File baseDir = new File(System.getProperty("test.build.data", "build/test/data"), "dfs/");
+        File baseDir = new File(System.getProperty("test.build.data", "target/build/test/data"), "dfs/");
         Configuration cluster1Conf = new Configuration(true);
         Configuration cluster2Conf = new Configuration(true);
         cluster1Conf.set("dfs.name.dir", new File(baseDir, "cluster1_name1").getPath() + "," +
@@ -41,14 +41,37 @@ public class HdfsTest {
                 new File(baseDir, "cluster1_sec2").getPath());
         cluster2Conf.set("fs.checkpoint.dir", new File(baseDir, "cluster2_sec1").getPath() + "," +
                 new File(baseDir, "cluster2_sec2").getPath());
-        
-        srcCluster = new MiniDFSCluster(0, cluster1Conf, 1, true, false, true, null, 
-                null, null, null);
-        sinkCluster = new MiniDFSCluster(0, cluster2Conf, 1, true, false, true, null, 
-                null, null, null);
+
+        srcCluster = new MiniDFSCluster.Builder(cluster1Conf)
+                .nameNodePort(0)
+                .numDataNodes(1)
+                .format(true)
+                .manageNameDfsDirs(true)
+                .manageDataDfsDirs(true)
+                .build();
+
+        sinkCluster = new MiniDFSCluster.Builder(cluster2Conf)
+                .nameNodePort(0)
+                .numDataNodes(1)
+                .format(true)
+                .manageNameDfsDirs(true)
+                .manageDataDfsDirs(true)
+                .build();
 
         srcFs = srcCluster.getFileSystem();
         sinkFs = sinkCluster.getFileSystem();
+
+        try {
+            OutputStream os = srcFs.create(new Path("/test"), true);
+            os.write("test".getBytes());
+            os.flush();
+            os.close();
+        } catch(RemoteException re) {
+            // This is an absolutely, positively, awful hack.
+            // For some reason, in Hadoop 2.0.0-cdh4.4.0, the
+            // first write to HDFS fails on srcFs. All subsequent
+            // writes work just fine.
+        }
     }
     
     /**
@@ -62,7 +85,7 @@ public class HdfsTest {
             }
         }
     }
-    
+
     @AfterClass
     public static void shutdownMiniDfsClusters() {
         if(srcCluster != null) {
@@ -72,23 +95,23 @@ public class HdfsTest {
             TestUtil.shutdownMiniDfs(sinkCluster);
         }
     }
-    
+
     @Test
     public void testHdfsToHdfs() throws Exception {
         final String FILE_CONTENTS = "Unicorns are better than ponies";
-        
+
         srcFs.mkdirs(new Path("/copysrc"));
         TestUtil.writeHdfsFile(srcFs, "/copysrc/myfile.txt", FILE_CONTENTS);
-        
-        HBackup hBackup = new HBackup(HBackupConfig.forTests(getSourceUrl("/copysrc"), 
+
+        HBackup hBackup = new HBackup(HBackupConfig.forTests(getSourceUrl("/copysrc"),
                 getSinkUrl("/copydest"), null, srcFs.getConf(),
                 sinkFs.getConf(), null, null));
         hBackup.runWithCheckedExceptions();
-        
+
         Assert.assertTrue(sinkFs.exists(new Path("/copydest/myfile.txt")));
         TestUtil.verifyHdfsContents(sinkFs, "/copydest/myfile.txt", FILE_CONTENTS);
     }
-    
+
     /**
      * If a file exists in the destination but has a different mtime, it should get overwritten.
      */
@@ -172,7 +195,7 @@ public class HdfsTest {
         new HBackup(config).runWithCheckedExceptions();
         Assert.assertTrue(sinkFs.exists(new Path("/to/empty.txt")));
     }
-    
+
     private static String getSourceUrl(String dirName) {
         if(dirName.startsWith("/")) {
             dirName = dirName.substring(1);
