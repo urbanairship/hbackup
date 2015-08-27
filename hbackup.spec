@@ -26,9 +26,8 @@ Group:          Development/Libraries \
 %defattr(-,root,root)                 \
 /mnt/services/%1/
 
-%service_macro reports-backup
-# The new mapr backup service
 %service_macro hbackup-reports
+%service_macro hbackup-babar
 
 %prep
 %setup -q
@@ -47,8 +46,8 @@ mkdir -p %{buildroot}/mnt/services/%1/rpm/lib/java \
 cp target/*.jar %{buildroot}/mnt/services/%1/rpm/lib/java/ \
 ln -s -T rpm %{buildroot}/mnt/services/%1/current
 
-%install_macro reports-backup
 %install_macro hbackup-reports
+%install_macro hbackup-babar
 
 %clean
 rm -rf $RPM_BUILD_ROOT
