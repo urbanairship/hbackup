@@ -4,15 +4,15 @@ Copyright 2012 Urban Airship and Contributors
 
 package com.urbanairship.hbackup;
 
-import java.io.IOException;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.util.ArrayDeque;
-import java.util.List;
-
 import com.urbanairship.hbackup.datasinks.HdfsSink;
 import com.urbanairship.hbackup.datasinks.InMemoryDataSink;
 import com.urbanairship.hbackup.datasinks.Jets3tSink;
+import com.urbanairship.hbackup.datasinks.LocalDiskDataSink;
+
+import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.util.List;
 
 /**
  * A "sink" is a place to store data. Each type of Sink is an implementation of this abstract class. New
@@ -34,6 +34,8 @@ public abstract class Sink {
             return new HdfsSink(uri, conf, stats, checksumService);
         } else if (scheme.equals("memory")) {
             return InMemoryDataSink.getInstance();
+        }else if (scheme.equals("file")) {
+            return new LocalDiskDataSink(uri, conf, stats, checksumService);
         }
         else {
             throw new IllegalArgumentException("Unknown protocol \"" + scheme + "\" in  URI " + uri);

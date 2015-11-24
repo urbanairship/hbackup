@@ -4,11 +4,6 @@ Copyright 2012 Urban Airship and Contributors
 
 package com.urbanairship.hbackup;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.util.Random;
-
 import org.apache.commons.codec.binary.Hex;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -16,6 +11,9 @@ import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.jets3t.service.S3Service;
 import org.jets3t.service.model.S3Object;
 import org.junit.Assert;
+
+import java.io.*;
+import java.util.Random;
 
 public abstract class TestUtil {
     private TestUtil() {
@@ -69,7 +67,17 @@ public abstract class TestUtil {
     }
     
     
-    public static void verifyS3Obj(S3Service service, String bucket, String key, byte[] contents) 
+    public static void verifyLocalContents(String path, String contents) throws Exception {
+        if(!path.startsWith("/")) {
+            // Never treat paths as relative to home direcotry
+            path = "/" + path;
+        }
+        InputStream is = new FileInputStream(new File(path));
+        TestUtil.assertStreamEquals(contents.getBytes(), is);
+    }
+
+
+    public static void verifyS3Obj(S3Service service, String bucket, String key, byte[] contents)
             throws Exception {
         @SuppressWarnings("unused")
         S3Object[] listing = service.listObjects(bucket);
